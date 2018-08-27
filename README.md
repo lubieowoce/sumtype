@@ -1,0 +1,1 @@
+A library for defining sum types.

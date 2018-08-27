@@ -1,0 +1,13 @@
+[[source]]
+name = "pypi"
+verify_ssl = true
+url = "https://pypi.org/simple"
+
+[dev-packages]
+"7c4da24" = {editable = true, path = ".\\..\\indented"}
+
+[requires]
+python_version = "3.5"
+
+[packages]
+"7c4da24" = {editable = true, path = ".\\..\\indented"}
