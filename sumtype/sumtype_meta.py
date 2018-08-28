@@ -1,4 +1,4 @@
-from sumtype_slots import sumtype as make_sumtype
+from .sumtype_slots import sumtype as make_sumtype
 
 # from pprint import pprint
 import inspect

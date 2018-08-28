@@ -423,7 +423,7 @@ def untyped_sumtype(
 		constructor = eval_def(_def_constructor)
 		constructor.__qualname__ = '{}.{}'.format(name, constructor.__name__)
 		setattr(Class, variant, classmethod(constructor))
-		constructors.append(constructor)
+		constructors.append(getattr(Class, variant)) # get the bound classmethod
 
 	Class._constructors = tuple(constructors)
 

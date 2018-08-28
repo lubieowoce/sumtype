@@ -1,8 +1,8 @@
 from typing import Tuple
 
-from sumtype_meta import sumtype_meta
-from sumtype_slots import sumtype         as make_sumtype
-from sumtype_slots import untyped_sumtype as make_untyped_sumtype
+from .sumtype_meta import sumtype_meta
+from .sumtype_slots import sumtype         as make_sumtype
+from .sumtype_slots import untyped_sumtype as make_untyped_sumtype
 __all__ = ['sumtype']
 
 import sys
@@ -99,13 +99,7 @@ class sumtype(metaclass=sumtype_meta, process_class=False):
 		return make_sumtype(typename, variant_names_and_specs, **options)
 
 	# swallow the arguments passed to __new__()
-	def __init__(cls, typename, variant_names_and_specs, **options):
-		"""A wrapper around `sumtype_slots.sumtype()`
-		to support namedtuple-style definitions:
-			T = sumtype('T', ...)
-		See `help(sumtype)` for more.
-		"""
-		pass
+	def __init__(cls, typename, variant_names_and_specs, **options): pass
 		
 	@classmethod
 	def with_constructors(cls, typename, variant_names_and_specs, **options) -> Tuple[type, ...]:
@@ -163,9 +157,8 @@ def get_callers_module_if_necessary_or_warn(options, typename) -> str:
 
 
 
-if __name__ == '__main__':
-
-	# create it like this...
+def demo():
+	# create a class like this...
 	class Thing(sumtype):
 		def Foo(x: int, y: int): ...
 		def Bar(y: str): ...
@@ -209,7 +202,7 @@ if __name__ == '__main__':
 
 	# ... or like this ... 
 	Thing2 = sumtype.untyped(
-	'Thing',
+	'Thing2',
 	[
 		('Foo', ['x', 'y',]),
 		('Bar', ['y',     ]),
@@ -233,103 +226,9 @@ if __name__ == '__main__':
 
 
 
+if __name__ == '__main__':
+	demo()
 
-
-def demo():
-
-	class Thing(sumtype):
-		def Foo(x: int, y: int): ...
-		def Bar(y: str): ...
-		def Zip(hey: str): ...
-		def Bop(): ...
-		# ^ constructor stubs (will be filled in by sumtype)
-
-		__doc__ = """
-		There are many kinds of things,
-		so we need a whole bunch of variants.
-		"""
-		# ^ The docstring could be at the top in its normal form,
-		# but it's nicer to have the constructors on top
-
-		def my_method(thing, n: int) -> int:
-			"Does stuff, and will be included in the generated class!"
-			if thing.is_Foo():
-				return thing.x + n*thing.y
-			elif thing.is_Bar():
-				return n + len(thing.y)
-			else:
-				return n
-
-		@classmethod
-		def make_something(cls):
-			return cls.Zip('hello')
-
-	# print(Thing)
-	# help(Thing)
-	# print()
-
-	f = Thing.Foo(3, 5)
-	print(f)
-	print(f, '.my_method(5) -> ', f.my_method(5), sep='')
-	print()
-	b = Thing.Bar("nice")
-	print(b)
-	print(b, '.my_method(5) -> ', b.my_method(5), sep='')
-	print()
-	print('Thing.make_something() -> ', Thing.make_something(), sep='')
-	print()
-
-
- 
-	class lowercase(sumtype):
-		def some(val): ...
-		def none(): ...
-
-		__variants__ = ('some', 'none')
-		# ^ The constructors are lowercase,
-		# and by default `sumtype` just picks out all the uppercase functions,
-		# so we specify them manually
-
-		__doc__ = "shh. uppercase is too loud"
-
-		def bloop(self) -> str:
-			return \
-				self.match(
-					some = lambda val: 'bloop {}!'.format(val),
-					none = lambda:     'bloop...',
-				)
-			# if self.is_some():
-			# 	return 'bloop {}!'.format(self.val)
-			# elif self.is_none():
-			# 	return 'bloop...'
-			# else: self.impossible()
-
-		# def replace(self):
-
-
-	help(lowercase)
-	print()
-	print()
-	some, none = lowercase.some, lowercase.none
-	s = some('beep')
-	print(s)
-	print(s, '.bloop() -> ', s.bloop(), sep='')
-	print()
-
-	n = none()
-	print(n)
-	print(n, '.bloop() -> ', n.bloop(), sep='')
-	print()
-
-	print('ruining a value:')
-	lowercase._unsafe_set_variant_id(s, 15)
-	try: res = repr(s)
-	except Exception as e: res = repr(e)
-	print('  repr ->', res)
-	
-	print('and fixing it:')
-	lowercase._unsafe_set_variant_id(s, 0)
-	print('  repr ->', s)
 
 
 # An experimental Haskell-like syntax, probably won't be used but hey

@@ -18,6 +18,7 @@ from indented.codegen import (
 Fun = Callable
 A = TypeVar('A')
 
+from functools import partial
 import sys
 from warnings import warn
 
@@ -147,88 +148,13 @@ def untyped_sumtype(
 		variant = _variant
 
 
-		# def _values(self) -> tuple:
-		# 	# TODO: codegen it
-		# 	cls = self.__class__
-		# 	field_vals = (
-		# 		field_descriptor.__get__(self)
-		# 		for field_descriptor
-		# 		in cls._positional_descriptors[ : len(cls._variant_id_fields[self._variant_id])]
-		# 	)
-		# 	return tuple(field_vals)
-		# values = _values
-
-
-		# def _as_tuple(self) -> tuple:
-		# 	return (self._variant,) + self._values()
-		# as_tuple = _as_tuple 
-		# _astuple = _as_tuple # namedtuple convention
-		# astuple  = _as_tuple
-
-
-
-		# def _as_dict(self) -> dict:
-		# 	# TODO: codegen it
-		# 	cls = self.__class__
-		# 	res = {'variant': self._variant}
-		# 	for (field, val) in zip(cls._variant_id_fields[self._variant_id], self._values()):
-		# 		res[field] = val
-		# 	return res
-		# as_dict = _as_dict
-		# _asdict = _as_dict # namedtuple convention
-		# asdict  = _as_dict # namedtuple convention
-
-
-
-		# def _replace(self, **fields_and_new_vals) -> name:
-		# 	"""
-		# 	Analogous to `namedtuple`'s `_replace`.
-		# 	Returns a new value with fields modified according
-		# 	to the keyword arguments.
-		# 	"""
-		# 	cls = self.__class__
-		# 	fields = cls._variant_id_fields[self._variant_id]
-		# 	field_descriptors = cls._positional_descriptors
-
-		# 	new = cls.__new__(cls)
-		# 	variant_id_descriptor = cls._variant_id
-		# 	variant_id_descriptor.__set__(new, self._variant_id)
-
-		# 	# important - by using zip, `field_descriptors` gets trimmed to the length of `fields`,
-		# 	# so we never access an uninitialized attribute
-		# 	for (field, field_descriptor) in zip(fields, field_descriptors):
-		# 		old_field_val = field_descriptor.__get__(self)
-		# 		new_field_val = fields_and_new_vals.pop(field, old_field_val)
-		# 		field_descriptor.__set__(new, new_field_val)
-
-		# 	if not fields_and_new_vals:
-		# 		return new
-		# 	else:
-		# 		# Reuse __getattr__'s error cause guessing.
-		# 		# TODO: Factor it out to make it less hacky.
-		# 		first_bad_field = next(iter(fields_and_new_vals))
-		# 		if first_bad_field.startswith('_'):
-		# 			# Catch this here. if __getattr__ sees this name, 
-		# 			# it will (correctly) guess that it can't be a field,
-		# 			# and will show the generic "object doesn't have attribute x" error.
-		# 			# However, if someone tries to `a._replace(_variant_id=15)`, the message will
-		# 			# be confusing, because the objects clearly *do* have a '_variant_id' attribute. 
-		# 			raise TypeError("_replace can only modify fields, and '{}' is not a field".format(first_bad_field))
-		# 		else:
-		# 			# getattr should give a nice error message
-		# 			self.__getattr__(first_bad_field)
-		#
-		#
-		# replace = _replace
-		# set     = _replace
-		# update  = _replace
-
 		@classmethod
 		def _from_tuple(cls, tup: tuple) -> name:
-			new = cls.__new__(cls)
-			new.__setstate__(tup)
-			return new
-
+			variant, values = tup[0], tup[1:]
+			constructor = getattr(cls, variant)
+			return constructor(*values)
+			
+		from_tuple = _from_tuple
 
 		def __hash__(self):
 			return hash(self._as_tuple())
@@ -257,25 +183,6 @@ def untyped_sumtype(
 		#	pickle tried to manually set each attribute from __slots__,
 		#	which didn't work because __setattr__ blocks all modification attempts.
 		#	__(get/set)state__ make pickle back off and let us handle all initialization. 
-
-		def __getstate__(self) -> tuple:
-			""" For pickling """
-			return self._as_tuple()
-
-		# def __setstate__(self, state: tuple) -> None:
-		# 	""" For unpickling """
-		# 	# TODO: efficiency - codegen it
-		# 	cls = self.__class__
-		# 	_variant_id, *field_vals = state
-
-		# 	variant_id_descriptor = cls._variant_id
-		# 	variant_id_descriptor.__set__(self, _variant_id)
-
-		# 	field_descriptors = cls._positional_descriptors 
-		# 	for (field_descriptor, field_val) in zip(field_descriptors, field_vals):
-		# 		field_descriptor.__set__(self, field_val)
-
-
 
 
 		# Methods that always raise
@@ -456,30 +363,45 @@ def untyped_sumtype(
 	else:
 		_set_attr = '{obj}._{attr} = {val}'
 
-	# ._values()
 
-	mk_def_values = lambda variant_id_fields, variants: [
-		'def _values(self) -> tuple:', [
+	# template function for multiple functions that just pack the fields into a structure and return it
+
+	mk_def_convert = lambda func_name, ret_type, mk_result, variant_ids, variant_id_fields, variants: [
+		'def '+func_name+'(self) -> '+ret_type+':', [
 			'_variant_id = self._variant_id',
 			*cond(
 				[ when("_variant_id == "+lit(id_), [
-					"return " + tuple_( 'self._{}_{}'.format(variants[id_], field) for field in variant_id_fields[id_] )
+					"return " + mk_result(selfname='self', id_varname='_variant_id', id_=id_, variant=variant, fields=fields)
+					# "return " + tuple_(['_variant_id'] + [ 'self._{variant}_{field}'.format(variant=variant, field=field) for field in fields ])
 				  ])
-				  for id_ in variant_ids
+				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
 				],
 				default=['raise self.__class__._get_invalid_variant_error(_variant_id)'],
 				allow_zero_cases=True
 			)
 		],
 	]
+	mk_def_convert = partial(
+			mk_def_convert,
+			variant_ids=Class._variant_ids,
+			variant_id_fields=Class._variant_id_fields,
+			variants=Class._variants
+	)
 
+
+	#._values()
+
+	mk_values_result = lambda selfname, id_varname, id_, variant, fields: \
+		tuple_( '{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields)
 	def_values = \
 		flatten_tree(
-			mk_def_values(
-				variant_id_fields=Class._variant_id_fields,
-				variants=Class._variants,
+			mk_def_convert(
+				func_name='values',
+				ret_type='tuple',
+				mk_result=mk_values_result,
 			)
 		)
+
 	if verbose:
 		print(def_values, end='\n\n')
 
@@ -490,27 +412,15 @@ def untyped_sumtype(
 
 	# ._as_tuple()
 
-	mk_def_as_tuple = lambda variant_ids, variant_id_fields, variants: [
-		'def _as_tuple(self) -> tuple:', [
-			'_variant_id = self._variant_id',
-			*cond(
-				[ when("_variant_id == "+lit(id_), [
-					"return " + tuple_(['_variant_id'] + [ 'self._{variant}_{field}'.format(variant=variant, field=field) for field in fields ])
-				  ])
-				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				],
-				default=['raise self.__class__._get_invalid_variant_error(_variant_id)'],
-				allow_zero_cases=True
-			)
-		],
-	]
+	mk_as_tuple_result = lambda selfname, id_varname, id_, variant, fields: \
+		tuple_([lit(variant)]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
 
 	def_as_tuple = \
 		flatten_tree(
-			mk_def_as_tuple(
-				variant_ids=Class._variant_ids, 
-				variant_id_fields=Class._variant_id_fields, 
-				variants=Class._variants, 
+			mk_def_convert(
+				func_name='_as_tuple',
+				ret_type='tuple',
+				mk_result=mk_as_tuple_result,
 			)
 		)
 	if verbose:
@@ -525,27 +435,20 @@ def untyped_sumtype(
 
 	# ._as_dict()
 
-	mk_def_as_dict = lambda variant_ids, variant_id_fields, variants: [
-		'def _as_dict(self) -> dict:', [
-			'_variant_id = self._variant_id',
-			*cond(
-				[ when("_variant_id == "+lit(id_), [
-					"return " + dict_([(lit('variant'), lit(variant))] + [ (lit(field), 'self._{variant}_{field}'.format(variant=variant, field=field)) for field in fields ])
-				  ])
-				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				],
-				default=['raise self.__class__._get_invalid_variant_error(_variant_id)'],
-				allow_zero_cases=True
-			)
-		],
-	]
+	mk_as_dict_result = lambda selfname, id_varname, id_, variant, fields: \
+		dict_(
+			[(lit('variant'), lit(variant))] +
+			[ (lit(field), '{selfname}._{variant}_{field}'\
+								.format(selfname=selfname, variant=variant, field=field))
+			  for field in fields ]
+		)
 
 	def_as_dict = \
 		flatten_tree(
-			mk_def_as_dict(
-				variant_ids=Class._variant_ids, 
-				variant_id_fields=Class._variant_id_fields, 
-				variants=Class._variants, 
+			mk_def_convert(
+				func_name='_as_dict',
+				ret_type='dict',
+				mk_result=mk_as_dict_result,
 			)
 		)
 	if verbose:
@@ -556,6 +459,26 @@ def untyped_sumtype(
 	Class.as_dict  = _as_dict 
 	Class._asdict  = _as_dict # namedtuple convention
 	Class.asdict   = _as_dict
+
+
+	# .__getstate__()
+
+	mk_getstate_result = lambda selfname, id_varname, id_, variant, fields: \
+		tuple_([id_varname]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
+	def_getstate = \
+		flatten_tree(
+			mk_def_convert(
+				func_name='__getstate__',
+				ret_type='tuple',
+				mk_result=mk_getstate_result,
+			)
+		)
+
+	if verbose:
+		print(def_getstate, end='\n\n')
+
+	__getstate__ = eval_def(def_getstate)
+	Class.__getstate__ = __getstate__
 
 
 	mk_def_replace = lambda typename, immutable, variant_ids, variants, variant_id_fields, _set_attr: [
@@ -760,7 +683,7 @@ def untyped_sumtype(
 		constructor = eval_def(_def_constructor)
 		constructor.__qualname__ = '{}.{}'.format(name, constructor.__name__)
 		setattr(Class, variant, classmethod(constructor))
-		constructors.append(constructor)
+		constructors.append(getattr(Class, variant)) # get the bound classmethod
 
 	Class._constructors = tuple(constructors)
 
@@ -948,29 +871,49 @@ def untyped_sumtype(
 
 	# __setstate__
 
-	mk_def_setstate = lambda typename, variant_ids, variants, variant_id_fields, _set_attr: [
-		'def __setstate__(self, state: tuple) -> None:', [
-			'cls = self.__class__',
-			'variant_id = state[0]',
-			_set_attr.format(obj='self', attr='variant_id', val='variant_id'),
-			# 'cls._unsafe_set_variant_id(self, variant_id)',
-			*cond(
-				[ when('variant_id == '+lit(id_), [
-					tuple_(['_']+['new_'+field for field in fields])+' = state'  
-				  ]+[
-					_set_attr.format(obj='self', attr=variant+'_'+field, val='new_'+field)
-					# 'cls._unsafe_set_{variant}_{field}(self, new_{field})'\
-					# 	.format(field=field, variant=variant)
-					 for field in fields
-					 # for (field_ix, field) in enumerate(variant_id_fields[id_])
-				  ]+['return'])
-				 for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields) if fields
-				],
-				default=['raise cls._get_invalid_variant_error(variant_id)'],
-				allow_zero_cases=True,
-			),
-		],
-	]
+	def mk_def_setstate(typename, variant_ids, variants, variant_id_fields, _set_attr):
+		with_fields    = [
+			(id_, variant, fields)
+			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			if fields
+		]
+		without_fields = [
+			(id_, variant, fields)
+			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			if not fields
+		]
+
+		return [
+			'def __setstate__(self, state: tuple) -> None:', [
+				'cls = self.__class__',
+				'variant_id = state[0]',
+				_set_attr.format(obj='self', attr='variant_id', val='variant_id'),
+				# 'cls._unsafe_set_variant_id(self, variant_id)',
+				*cond(
+					([when(
+						join_with_op(
+							['variant_id == '+lit(id_) for (id_, _, _) in without_fields],
+							op='or', zero=False,
+						),
+						['return'])
+					] if without_fields else [])
+					+
+					[ when('variant_id == '+lit(id_), [
+						tuple_(['_']+['new_'+field for field in fields])+' = state'  
+					  ]+[
+						_set_attr.format(obj='self', attr=variant+'_'+field, val='new_'+field)
+						# 'cls._unsafe_set_{variant}_{field}(self, new_{field})'\
+						# 	.format(field=field, variant=variant)
+						 for field in fields
+						 # for (field_ix, field) in enumerate(variant_id_fields[id_])
+					  ]+['return'])
+					 for (id_, variant, fields) in with_fields
+					],
+					default=['raise cls._get_invalid_variant_error(variant_id)'],
+					allow_zero_cases=True,
+				),
+			],
+		]
 
 	_def_setstate = \
 		flatten_tree(
@@ -1106,7 +1049,7 @@ def main():
 	# print(dir(Thing))
 
 	print()
-	dis_func = Thing.match
+	dis_func = Thing.__setstate__
 	print('dis(%s):' % dis_func.__qualname__)
 	print()
 	dis(dis_func)
@@ -1299,3 +1242,93 @@ if __name__ == '__main__':
 	main()
 
 
+# dynamic versions of some methods
+
+# def __setstate__(self, state: tuple) -> None:
+# 	""" For unpickling """
+# 	# TODO: efficiency - codegen it
+# 	cls = self.__class__
+# 	_variant_id, *field_vals = state
+
+# 	variant_id_descriptor = cls._variant_id
+# 	variant_id_descriptor.__set__(self, _variant_id)
+
+# 	field_descriptors = cls._positional_descriptors 
+# 	for (field_descriptor, field_val) in zip(field_descriptors, field_vals):
+# 		field_descriptor.__set__(self, field_val)
+
+
+# def _values(self) -> tuple:
+# 	# TODO: codegen it
+# 	cls = self.__class__
+# 	field_vals = (
+# 		field_descriptor.__get__(self)
+# 		for field_descriptor
+# 		in cls._positional_descriptors[ : len(cls._variant_id_fields[self._variant_id])]
+# 	)
+# 	return tuple(field_vals)
+# values = _values
+
+
+# def _as_tuple(self) -> tuple:
+# 	return (self._variant,) + self._values()
+# as_tuple = _as_tuple 
+# _astuple = _as_tuple # namedtuple convention
+# astuple  = _as_tuple
+
+
+
+# def _as_dict(self) -> dict:
+# 	# TODO: codegen it
+# 	cls = self.__class__
+# 	res = {'variant': self._variant}
+# 	for (field, val) in zip(cls._variant_id_fields[self._variant_id], self._values()):
+# 		res[field] = val
+# 	return res
+# as_dict = _as_dict
+# _asdict = _as_dict # namedtuple convention
+# asdict  = _as_dict # namedtuple convention
+
+
+# def _replace(self, **fields_and_new_vals) -> name:
+# 	"""
+# 	Analogous to `namedtuple`'s `_replace`.
+# 	Returns a new value with fields modified according
+# 	to the keyword arguments.
+# 	"""
+# 	cls = self.__class__
+# 	fields = cls._variant_id_fields[self._variant_id]
+# 	field_descriptors = cls._positional_descriptors
+
+# 	new = cls.__new__(cls)
+# 	variant_id_descriptor = cls._variant_id
+# 	variant_id_descriptor.__set__(new, self._variant_id)
+
+# 	# important - by using zip, `field_descriptors` gets trimmed to the length of `fields`,
+# 	# so we never access an uninitialized attribute
+# 	for (field, field_descriptor) in zip(fields, field_descriptors):
+# 		old_field_val = field_descriptor.__get__(self)
+# 		new_field_val = fields_and_new_vals.pop(field, old_field_val)
+# 		field_descriptor.__set__(new, new_field_val)
+
+# 	if not fields_and_new_vals:
+# 		return new
+# 	else:
+# 		# Reuse __getattr__'s error cause guessing.
+# 		# TODO: Factor it out to make it less hacky.
+# 		first_bad_field = next(iter(fields_and_new_vals))
+# 		if first_bad_field.startswith('_'):
+# 			# Catch this here. if __getattr__ sees this name, 
+# 			# it will (correctly) guess that it can't be a field,
+# 			# and will show the generic "object doesn't have attribute x" error.
+# 			# However, if someone tries to `a._replace(_variant_id=15)`, the message will
+# 			# be confusing, because the objects clearly *do* have a '_variant_id' attribute. 
+# 			raise TypeError("_replace can only modify fields, and '{}' is not a field".format(first_bad_field))
+# 		else:
+# 			# getattr should give a nice error message
+# 			self.__getattr__(first_bad_field)
+#
+#
+# replace = _replace
+# set     = _replace
+# update  = _replace

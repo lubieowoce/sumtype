@@ -10,5 +10,5 @@ from .sumtype_slots import untyped_sumtype as make_untyped_sumtype
 # from . import sumtype	 		  as sumtype
 from . import sumtype_meta 		  as meta
 from . import sumtype_slots       as slots
-from . import sumtype_plain_tuple as tuple
+from . import experimental
 
