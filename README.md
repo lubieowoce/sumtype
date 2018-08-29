@@ -1,8 +1,11 @@
 # `sumtype`
 A `namedtuple`-style library for defining immutable **sum types** in Python.
-The current version is `0.9`, quickly approaching `1.0`.
 
-**Sum types** are also known as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++).
+The current version is `0.9`, quickly approaching `1.0`.
+Suggestions and contributions are welcome! 
+
+> *You may know **sum types** under a different name –
+> they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++.*
 
 ### A quick tour
 ```python
@@ -45,20 +48,17 @@ If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see
 ```
 They're still just different values of the same type though!
 ```python
-    >>> [type(foo), type(bar), type(zap)]
-    [<class '__main__.Thing'>, <class '__main__.Thing'>, <class '__main__.Thing'>]
+    >>> all([type(foo) is Thing, type(bar) is Thing, type(zap) is Thing])
+    True
 ```
 
-As you can see, `sumtype` generated the constructors, a `__repr__()`, and accessors for each attributes.
-(It generates many other useful methods too! See below for more.) 
+As you can see, `sumtype` generated the constructors, a `__repr__()`, and accessors for each attribute.
+(It generates many other useful methods too, demonstrated below.) 
 
 The library is designed with efficiency in mind¹ – it uses `__slots__` for attribute storage
 and generates specialized versions of all the methods for each class.
-To see the generated code, do
-```python
->>> class Thing(sumtype, verbose=True)
-...     ... 
-```
+To see the generated code, do ` class Thing(sumtype, verbose=True):`.
+
 ¹ At least I like to think so ;)  I try to do my best with profiling things though!
 
 
@@ -68,8 +68,8 @@ To see the generated code, do
     True
     >>> Thing.Foo(1,2) == Thing.Bar('a', 'b');
     False
-    >>> {foo, bar, bar, zap}
-    {Thing.Bar(y='hello', hmm='world'), Thing.Foo(x=3, y=5), Thing.Zap()}
+    >>> {foo, foo, bar, zap} == {foo, bar, zap}
+    True
 ```
 
 #### Pattern matching 1
@@ -103,23 +103,24 @@ To see the generated code, do
     [15, -1, 999]
 ```
 
-#### Updating (without modifying in-place)
+#### Updating
 ```python
     >>> foo;  foo.replace(x=99)
     Thing.Foo(x=3, y=5)
-    Thing.Foo(x=5, y=99)
+    Thing.Foo(x=99, y=5)
     >>>
     >>> bar;  bar.replace(y='abc', hmm='xyz')
     Thing.Bar(y='hello', hmm='world')
     Thing.Bar(y='abc', hmm='xyz')
 ```
+Note that, like in `namedtuple`, `foo.replace(x=99)` returns a new value.
 
 #### Value access and conversions
 ```python
     >>> foo.values();  foo.as_tuple();  foo.as_dict()
     (3, 5)
     ('Foo', 3, 5)
-    {'variant': 'Foo', 'y': 5, 'x': 3}
+    OrderedDict([('variant', 'Foo'), ('x', 3), ('y', 5)])
     >>>
     >>> Thing.from_tuple(('Bar', 'one', 'two'))
     Thing.Bar(y='one', hmm='two')
@@ -135,8 +136,11 @@ To see the generated code, do
     True
 ```
 
+And that's all... for now!
+
+
 ### Features coming in `1.0`
-- Actually include the user annotations in the generated constructors
+- Type annotations on generated constructors
 - Default values
 - Argument typechecking - always, or in `__debug__` mode only
 - `.from_dict()`

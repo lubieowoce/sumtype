@@ -9,7 +9,7 @@ from typing import (
 from indented.text    import flatten_tree
 from indented.codegen import (
 	lit, apply, 
-	tuple_, dict_,
+	tuple_, list_, # dict_,
 	def_, cond, when,
 	join_with_op,
 	eval_def,
@@ -18,6 +18,7 @@ from indented.codegen import (
 Fun = Callable
 A = TypeVar('A')
 
+from collections import OrderedDict
 from functools import partial
 import sys
 from warnings import warn
@@ -469,20 +470,30 @@ def untyped_sumtype(
 
 
 	# ._as_dict()
-
+	Class._OrderedDict = OrderedDict
 	mk_as_dict_result = lambda selfname, id_varname, id_, variant, fields: \
-		dict_(
-			[(lit('variant'), lit(variant))] +
-			[ (lit(field), '{selfname}._{variant}_{field}'\
-								.format(selfname=selfname, variant=variant, field=field))
-			  for field in fields ]
-		)
+		apply(selfname+'.__class__._OrderedDict', [
+			tuple_(
+				[tuple_([lit('variant'), lit(variant)])]
+				+
+				[ tuple_([lit(field), '{selfname}._{variant}_{field}'\
+											.format(selfname=selfname, variant=variant, field=field)])
+				  for field in fields ]
+			)
+		])
 
+	# mk_as_dict_result = lambda selfname, id_varname, id_, variant, fields: \
+	# 	dict_(
+	# 		[(lit('variant'), lit(variant))] +
+	# 		[ (lit(field), '{selfname}._{variant}_{field}'\
+	# 							.format(selfname=selfname, variant=variant, field=field))
+	# 		  for field in fields ]
+	# 	)
 	def_as_dict = \
 		flatten_tree(
 			mk_def_convert(
 				func_name='_as_dict',
-				ret_type='dict',
+				ret_type=lit('OrderedDict'),
 				mk_result=mk_as_dict_result,
 			)
 		)

@@ -1,4 +1,4 @@
-raise NotImplementedError("Profiling {} isn't functional yet".format(__name__))
+raise NotImplementedError("Profiling code was copied from another module and isn't functional yet")
 
 
 # allow this module to import the whole package
