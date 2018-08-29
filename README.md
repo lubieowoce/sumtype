@@ -2,7 +2,7 @@
 A `namedtuple`-style library for defining immutable **sum types** in Python.
 The current version is `0.9`, quickly approaching `1.0`.
 
-**Sum types** are also known as `tagged unions`, `enums` in `Rust`/`Swift`, and `variants` in `C++`).
+**Sum types** are also known as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++).
 
 ### A quick tour
 ```python
@@ -15,29 +15,29 @@ The current version is `0.9`, quickly approaching `1.0`.
     ...
     >>>
 ```
-This means that a value of `Thing` can be:
-- a `Foo` containing two ints
-- a `Bar` containing two strings
-- a `Zap`, which contains nothing.
+This means that a `Thing` value can be:
+- a `Foo` with two `int` fields, `x` and `y`
+- a `Bar` with two `string` fields, `y` and `hmm`
+- a `Zap` with no fields
 
 You can also add your own docstring and methods in the class definition.
 If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see `Thing2` in `sumtype.sumtype.demo()` for an example.
 
 #### Creating values and attribute access
 ```python
+	>>> f, b, z = Thing.Foo(x=3, y=5),  Thing.Bar('hello', 'world'),  Thing.Zap()
+	>>>
     >>> foo = Thing.Foo(x=3, y=5) # named arguments
     >>> foo
     Thing.Foo(x=3, y=5)
-    >>> foo.x;  foo.y;
-    3
-    5
+    >>> foo.x, foo.y;
+    (3, 5)
     >>>
     >>> bar = Thing.Bar('hello', 'world') # positional arguments
     >>> bar
     Thing.Bar(y='hello', hmm='world')
-    >>> bar.y;  bar.hmm
-    'hello'
-    'world'
+    >>> bar.y,  bar.hmm
+    ('hello', 'world')
     >>>
     >>> zap = Thing.Zap()
     >>> zap
@@ -133,12 +133,24 @@ To see the generated code, do
     True
 ```
 
-### Features planned for `1.0`
-- Argument typechecking - always, or in __debug__ mode only
+### Features coming in `1.0`
+- Actually include the user annotations in the generated constructors
 - Default values
+- Argument typechecking - always, or in `__debug__` mode only
+- `.from_dict()`
 
-### Possible features
-- Provide alternative dynamic alternatives to custom-generated methods --
+
+### Possible future features
+
+- `mypy` support.
+Last time I checked, it didn't really handle metaclass-created classes - that might have changed.
+Alternatively, we could provide a way to generate stub files.
+- Statically generating a class definition to a file
+
+- Dynamic alternatives to custom-generated methods –
 might be useful if startup time is more important than efficiency
-- An alternative implementation backed by tuples if true immutability is desired
-- Support opt-in mutability
+
+- An alternative implementation backed by tuples if true immutability is desired –
+there's currently no way to make a `__slots__`-based implementation watertight in that aspect, though we're doing our best
+
+- *Maybe* opt-in mutability – currently, you can use `Thing._unsafe_set_Foo_x(foo, 10)` if you want that, but that's not a nice interface
