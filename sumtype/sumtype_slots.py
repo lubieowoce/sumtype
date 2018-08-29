@@ -1,6 +1,6 @@
 from typing import (
 	Any,
-	Tuple, List, Iterator,
+	Tuple, List, Iterator, Union,
 	Callable,
 	TypeVar,
 	NoReturn, # functions that always raise or exit the interpreter 
@@ -30,6 +30,39 @@ __all__ = [
 	'untyped_sumtype',
 ]
 
+def name_errors(name: str, use: str = '') -> List[str]:
+	errors = []
+	if name.startswith('_'):
+		errors.append("Invalid {use} name: {name!r} - {use} names cannot contain leading underscores".format(**locals()))
+	if not name.isidentifier():
+		errors.append("Invalid {use} name: {name!r} - {use} names must be valid Python identifiers".format(**locals()))
+	return errors
+
+
+	
+def untyped_spec_errors(typename: str, variant_specs: List[ Tuple[str, List[str]] ]) -> List[str]:
+	assert type(typename) is str,  repr(typename)
+	errors = name_errors(typename, use='type')
+	seen_variants = set()
+	for (variant, fields) in variant_specs:
+		assert type(variant) is str,  repr(variant)
+		assert type(fields) in (list, tuple),  repr(variant)
+		errors.extend(name_errors(variant, use='variant'))
+
+		if variant in seen_variants:
+			errors.append("Repeated variant name {!r} in type {!r}".format(variant, typename))
+		else:
+			seen_variants.add(variant)
+
+		seen_fields = set()
+		for field in fields:
+			errors.extend(name_errors(field, use='field'))
+			if field in seen_fields:
+				errors.append("Repeated field name {!r} in variant {!r}".format(field, variant))
+			else:
+				seen_fields.add(field)
+
+	return errors
 
 
 
@@ -97,8 +130,10 @@ def untyped_sumtype(
 		
 	if (_set_members_with_assignment and immutable):
 		raise ValueError('Cannot use assignment to set members if the class is immutable')
-	# if not immutable:
-	# 	raise NotImplementedError('Mutability is not supported yet')
+
+	errors = untyped_spec_errors(name, variant_specs)
+	if errors:
+		raise ValueError('\n'.join(errors))
 
 	variant_names      = [variant_name for (variant_name, attr_names_and_types) in variant_specs]
 	variant_attr_names = [attr_names for (variant_name, attr_names) in variant_specs]

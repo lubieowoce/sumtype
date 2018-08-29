@@ -22,6 +22,11 @@ import sumtype
 
 uniq = sumtype.slots.uniq
 
+def test_make_from_bad_spec():
+	try: res = sumtype.sumtype.untyped('_Underscore Space Name', [('V', ['_a', 'as', 'b c']), ('V', ['x', 'x'])])
+	except Exception as e: res = e
+	assert isinstance(res, ValueError), repr(res)
+	print('Bad type spec handled OK')
 
 def make_void_classdef():
 	class Void(sumtype.sumtype, allow_zero_constructors=True):
@@ -283,10 +288,16 @@ def test_thing(Thing):
 
 if __name__ == '__main__':
 	print('Running tests')
+	print()
 	for Thing in (make_thing_classdef(), make_thing_call()):
 		test_thing(Thing)
 	print()
 	for Void in (make_void_classdef(), make_void_call()):
 		test_void(Void)
 	print()
+
+	test_make_from_bad_spec()
+
+
+
 

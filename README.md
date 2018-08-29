@@ -25,8 +25,8 @@ If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see
 
 #### Creating values and attribute access
 ```python
-	>>> f, b, z = Thing.Foo(x=3, y=5),  Thing.Bar('hello', 'world'),  Thing.Zap()
-	>>>
+    >>> f, b, z = Thing.Foo(x=3, y=5),  Thing.Bar('hello', 'world'),  Thing.Zap()
+    >>>
     >>> foo = Thing.Foo(x=3, y=5) # named arguments
     >>> foo
     Thing.Foo(x=3, y=5)
@@ -52,13 +52,15 @@ They're still just different values of the same type though!
 As you can see, `sumtype` generated the constructors, a `__repr__()`, and accessors for each attributes.
 (It generates many other useful methods too! See below for more.) 
 
-The library is designed for efficiency - it uses `__slots__` for attribute storage
+The library is designed with efficiency in mind¹ – it uses `__slots__` for attribute storage
 and generates specialized versions of all the methods for each class.
 To see the generated code, do
 ```python
 >>> class Thing(sumtype, verbose=True)
-... 	... 
+...     ... 
 ```
+¹ At least I like to think so ;)  I try to do my best with profiling things though!
+
 
 #### Equality and hashing
 ```python
