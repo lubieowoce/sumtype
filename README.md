@@ -8,8 +8,7 @@ A `namedtuple`-style library for defining immutable **sum types** in Python.
 [Get it on PyPI](https://pypi.org/project/sumtype/)
 
 The current version is `0.9.5`, quickly approaching `1.0`.
-The library supports Python 3.x
-(on versions <= 3.4, please install [`typing`](https://pypi.org/project/typing/)).
+The library supports Python 3.x.
 The core code has lived in various `utils` folders for about a year,
 before I got tired of copying it around and decided to release it as an independent package.
 (see also: [Should I use it?](https://github.com/lubieowoce/sumtype#should-i-use-it))
