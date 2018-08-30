@@ -3,6 +3,7 @@ from .sumtype_slots import sumtype as make_sumtype
 # from pprint import pprint
 import inspect
 from collections import OrderedDict
+import typing
 
 __all__ = [
 	'sumtype_meta',
@@ -22,10 +23,6 @@ class sumtype_meta(type):
 	"""
 	# creates something to hold the class namespace
 	def __prepare__(typename, bases, process_class=True, **_):
-		# print('sumtype_meta.__prepare__() was called with')
-		# print('typename: ', repr(typename), end=',\n')
-		# print('bases:    ', bases, end=',\n')
-
 		if process_class:
 			# preserve variant definition order
 			return OrderedDict()
@@ -45,16 +42,6 @@ class sumtype_meta(type):
 			without any processing. This is used for the `sumtype` convenience class.
 		"""
 
-		# print('sumtype_meta.__new__() was called with')
-		# print('typename: ', repr(typename), end=',\n')
-		# print('bases:    ', bases, end=',\n')
-		# print('process_class:', process_class)
-		# print('kwargs:     ', end='')
-		# pprint(kwargs)
-		# print('dict:')
-		# pprint(dct, indent=2)
-		# print()
-
 		if not process_class:
 			return type.__new__(metacls, typename, bases, dct)
 
@@ -73,18 +60,17 @@ class sumtype_meta(type):
 		for (variant, _) in variants_and_constructor_stubs:
 			del dct[variant]
 
-		# for (v, c) in variants_and_constructor_stubs:
-		#   print('\t', v, inspect.signature(c), sep='')
-		# print('\n')
+		variant_specs = []
+		for (variant, constructor_stub) in variants_and_constructor_stubs:
+			hints = typing.get_type_hints(constructor_stub)
+			spec = []
+			for (field, _param_descr) in inspect.signature(constructor_stub).parameters.items():
+				field_type = hints.get(field, typing.Any)
+				spec.append((field, field_type))
+			variant_specs.append((variant, spec))
 
-		variant_specs = [
-			(variant,  tuple((name, param_descr.annotation)
-							 for (name, param_descr)
-							 in inspect.signature(constructor_stub).parameters.items()))
-			for (variant, constructor_stub) in variants_and_constructor_stubs
-		]
-		# print(variant_specs)
 		module_name = dct['__module__']
+
 
 		Class = make_sumtype(typename, variant_specs, _module_name=module_name, **kwargs)
 

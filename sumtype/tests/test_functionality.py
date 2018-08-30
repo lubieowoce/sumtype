@@ -201,6 +201,23 @@ def test_thing(Thing):
 		assert res, '{!r} failed for {!r}'.format(expr, x)
 
 
+	expr = 'x == Thing.from_dict(x.as_dict())'
+	for x in values:
+		res = eval(expr)
+		assert res, '{!r} failed for {!r}'.format(expr, x)
+
+
+	left  = 'x'
+	right = 'x.replace(**x.values_dict())'
+	left_  = eval('lambda x: '+left)
+	right_ = eval('lambda x: '+right) 
+	for x_ in values:
+		vleft  = left_ (x_)
+		vright = right_(x_)
+		res = vleft == vright
+		assert res, '\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'.format(left, vleft, right, vright, x_,)
+
+
 	left  = 'set( x.as_dict().items() )'
 	right = 'set([("variant", x._variant)]) | set([(field, getattr(x, field)) for field in fields])'
 	left_  = eval('lambda x, fields: '+left)
