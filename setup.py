@@ -8,11 +8,11 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
 	name     = 'sumtype',
-	version  = '0.9.5',
+	version  = '0.9.5.post1',
 	packages = find_packages(exclude=['tests']),
 	install_requires = ['indented'],
 
-	description      = 'Create sum types easily',
+	description      = 'A namedtuple-style library for defining immutable sum types in Python.',
 	long_description = long_description,
 	long_description_content_type = "text/markdown",
 	keywords = 'sum variant tagged union enum type types',
