@@ -1,11 +1,13 @@
 # `sumtype`
 A `namedtuple`-style library for defining immutable **sum types** in Python.
 
-The current version is `0.9`, quickly approaching `1.0`.
+The current version is `0.9.5`, quickly approaching `1.0`.
 Suggestions and contributions are welcome! 
 
+Also, see the [Should I use it?](https://github.com/lubieowoce/sumtype#should-i-use-it) section.
 > *You may know **sum types** under a different name –
-> they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++.*
+> they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++. 
+> If you haven't heard about them yet, [here's](https://chadaustin.me/2015/07/sum-types/) a nice introduction.*
 
 ### A quick tour
 ```python
@@ -18,7 +20,7 @@ Suggestions and contributions are welcome!
     ...
     >>>
 ```
-This means that a `Thing` value can be:
+This means that a `Thing` value can be one of three variants:
 - a `Foo` with two `int` fields, `x` and `y`
 - a `Bar` with two `string` fields, `y` and `hmm`
 - a `Zap` with no fields
@@ -28,32 +30,43 @@ If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see
 
 #### Creating values and attribute access
 ```python
-    >>> f, b, z = Thing.Foo(x=3, y=5),  Thing.Bar('hello', 'world'),  Thing.Zap()
-    >>>
-    >>> foo = Thing.Foo(x=3, y=5) # named arguments
-    >>> foo
-    Thing.Foo(x=3, y=5)
-    >>> foo.x, foo.y;
-    (3, 5)
-    >>>
-    >>> bar = Thing.Bar('hello', 'world') # positional arguments
-    >>> bar
-    Thing.Bar(y='hello', hmm='world')
-    >>> bar.y,  bar.hmm
-    ('hello', 'world')
-    >>>
+    >>> foo = Thing.Foo(x=3, y=5)          # named arguments
+    >>> bar = Thing.Bar('hello', 'world')  # positional arguments
     >>> zap = Thing.Zap()
-    >>> zap
-    Thing.Zap()
 ```
-They're still just different values of the same type though!
+Note that they're still just different values of the same type, not subclasses:
 ```python
-    >>> all([type(foo) is Thing, type(bar) is Thing, type(zap) is Thing])
+    >>> type(foo) is Thing  and  type(bar) is Thing  and  type(zap) is Thing
     True
 ```
 
-As you can see, `sumtype` generated the constructors, a `__repr__()`, and accessors for each attribute.
-(It generates many other useful methods too, demonstrated below.) 
+Accessors for every field:
+```python
+    >>> foo.x, foo.y;
+    (3, 5)
+    >>> bar.y,  bar.hmm
+    ('hello', 'world')
+```
+...including checks if the access is valid and descriptive error messages:
+```python
+    >>> Thing.Zap().hmm  # only `Bar`s have a `hmm` field
+    Traceback (most recent call last):
+      ...
+    AttributeError: Incorrect 'Thing' variant: Field 'hmm' not declared in variant 'Zap'...
+    >>>
+    >>> Thing.Foo(x=1, y=2).blah_blah_blah  # no variant has a `blah_blah_blah` field 
+    Traceback (most recent call last):
+      ...
+    AttributeError: Unknown attribute: Field 'blah_blah_blah' not declared in any variant of 'Thing'...
+```
+
+A nice `__repr__()`:
+```python
+    >>> foo; bar; zap
+    Thing.Foo(x=3, y=5)
+    Thing.Bar(y='hello', hmm='world')
+    Thing.Zap()
+```
 
 The library is designed with efficiency in mind¹ – it uses `__slots__` for attribute storage
 and generates specialized versions of all the methods for each class.
@@ -61,6 +74,8 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 
 ¹ At least I like to think so ;)  I try to do my best with profiling things though!
 
+
+### Features
 
 #### Equality and hashing
 ```python
@@ -71,8 +86,31 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
     >>> {foo, foo, bar, zap} == {foo, bar, zap}
     True
 ```
+`__eq__` and `__hash__` pay attention to variant - even if we had a variant `Moo(x: int, y: int)`,
+`Foo(1,2) != Moo(1,2)` and `hash(Foo(1,2)) != hash(Moo(1,2))`.
 
-#### Pattern matching 1
+> **Note**: *Just like tuples, `sumtypes` `__eq__`/`__hash__` work by `__eq__`ing/`__hash__`ing the values inside,
+so the values must all implement the relevant method for it to work.*
+
+
+#### Modifying values
+```python
+    >>> foo;  foo.replace(x=99)
+    Thing.Foo(x=3, y=5)
+    Thing.Foo(x=99, y=5)
+    >>>
+    >>> bar;  bar.replace(y='abc', hmm='xyz')
+    Thing.Bar(y='hello', hmm='world')
+    Thing.Bar(y='abc', hmm='xyz')
+```
+`foo.replace(x=99)` returns a new value, just like in `namedtuple`.
+
+> **Note**: *`replace` and all the other methods have underscored aliases (`_replace`).
+So even if you have a field called `replace`, you can still use `my_value._replace(x=15)`.*
+
+
+#### Pattern matching
+##### Statement form:
 ```python
     >>> def do_something(val: Thing):
     ...     if val.is_Foo():
@@ -90,41 +128,38 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
     The result is hello world
     Whoosh!
 ```
-
-#### Pattern matching 2
+##### Expression form:
 ```python
-    >>> f = lambda val: val.match(
-    ...         Foo = lambda x, y: x * y,
-    ...         Zap = lambda: 999,
-    ...         _   = lambda: -1 # default case
-    ...     )
-    >>>
-    >>> [f(val) for val in (foo, bar, zap)]
+    >>> [ val.match(
+    ...      Foo = lambda x, y: x*y, 
+    ...      Zap = lambda: 999,
+    ...      _   = lambda: -1 # default case
+    ...   )
+    ...  for val in (foo, bar, zap)]
     [15, -1, 999]
 ```
 
-#### Updating
-```python
-    >>> foo;  foo.replace(x=99)
-    Thing.Foo(x=3, y=5)
-    Thing.Foo(x=99, y=5)
-    >>>
-    >>> bar;  bar.replace(y='abc', hmm='xyz')
-    Thing.Bar(y='hello', hmm='world')
-    Thing.Bar(y='abc', hmm='xyz')
-```
-Note that, like in `namedtuple`, `foo.replace(x=99)` returns a new value.
 
-#### Value access and conversions
+#### Conversions between `sumtypes` and standard types
+To...
 ```python
-    >>> foo.values();  foo.as_tuple();  foo.as_dict()
+    >>> foo.values();  foo.values_dict();
     (3, 5)
+    OrderedDict([('x', 3), ('y', 5)])
+```
+```python
+    >>> foo.as_tuple();  foo.as_dict()
     ('Foo', 3, 5)
     OrderedDict([('variant', 'Foo'), ('x', 3), ('y', 5)])
-    >>>
-    >>> Thing.from_tuple(('Bar', 'one', 'two'))
-    Thing.Bar(y='one', hmm='two')
 ```
+...and from
+```python
+    >>> Thing.from_tuple(('Foo', 10, 15));  Thing.from_dict({'variant':'Foo', 'x': 10, 'y': 15})
+    Thing.Foo(x=10, y=15)
+    Thing.Foo(x=10, y=15)
+```
+Also, `x == Thing.from_tuple(x.as_tuple())` and `x == Thing.from_dict(x.as_dict())`.
+
 
 #### Pickle support
 ```python
@@ -136,27 +171,39 @@ Note that, like in `namedtuple`, `foo.replace(x=99)` returns a new value.
     True
 ```
 
-And that's all... for now!
+There's also tests in `sumtype.tests` to ensure that it all works correctly.
+And that's everything... for now!
 
 
 ### Features coming in `1.0`
-- Type annotations on generated constructors
 - Default values
-- Argument typechecking - always, or in `__debug__` mode only
-- `.from_dict()`
+*(easy, just haven't gotten around to it yet)*
+
+- Argument typechecking – always, or in `__debug__` mode only
+*(less easy because of `typing` annotations like `Tuple[int, str]` –
+`typing` does not expose a way to check if a value matches a type like that)*
+
+
+### Should I use it?
+Yeah! I didn't just build this library because I thought it'd be nice –
+I'm using it heavily in an app I'm developing.
+Saying that it's battle-tested is a bit much, but it's getting there.
 
 
 ### Possible future features
 
 - `mypy` support.
-Last time I checked, it didn't really handle metaclass-created classes - that might have changed.
-Alternatively, we could provide a way to generate stub files.
+Unfortunately, last time I checked, `mypy` didn't handle metaclass-created classes too well, but that might have changed.
+Alternatively, we could provide a way to generate `mypy` stub files. Also, right now there's no way to tell `mypy` that
+the return type of accessors depend on the variant – `Union[a, b]` is close, but `mypy` will complain that not all cases
+are handled even if they are.
+
 - Statically generating a class definition to a file
 
 - Dynamic alternatives to custom-generated methods –
 might be useful if startup time is more important than efficiency
 
 - An alternative implementation backed by tuples if true immutability is desired –
-there's currently no way to make a `__slots__`-based implementation watertight in that aspect, though we're doing our best
+there's currently no way to make a `__slots__`-based implementation watertight in that aspect, I'm doing my best.
 
-- *Maybe* opt-in mutability – currently, you can use `Thing._unsafe_set_Foo_x(foo, 10)` if you want that, but that's not a nice interface
+- **Maybe** opt-in mutability – currently, you can use `Thing._unsafe_set_Foo_x(foo, 10)` if you want that, but that's not a nice interface
