@@ -1,13 +1,20 @@
 # `sumtype`
 A `namedtuple`-style library for defining immutable **sum types** in Python.
 
-The current version is `0.9.5`, quickly approaching `1.0`.
-Suggestions and contributions are welcome! 
-
-Also, see the [Should I use it?](https://github.com/lubieowoce/sumtype#should-i-use-it) section.
 > *You may know **sum types** under a different name –
 > they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++. 
 > If you haven't heard about them yet, [here's](https://chadaustin.me/2015/07/sum-types/) a nice introduction.*
+
+The current version is `0.9.5`, quickly approaching `1.0`.
+The library supports Python 3.x
+(on versions <= 3.4, please install [`typing`](https://pypi.org/project/typing/)).
+The core code has lived in various `utils` folders for about a year,
+before I got tired of copying it around and decided to release it as an independent package.
+(see also: [Should I use it?](https://github.com/lubieowoce/sumtype#should-i-use-it))
+
+Suggestions, feedback and contributions are very welcome!
+
+
 
 ### A quick tour
 ```python
@@ -40,14 +47,14 @@ Note that they're still just different values of the same type, not subclasses:
     True
 ```
 
-Accessors for every field:
+Every specified field gets an accessor:
 ```python
     >>> foo.x, foo.y;
     (3, 5)
     >>> bar.y,  bar.hmm
     ('hello', 'world')
 ```
-...including checks if the access is valid and descriptive error messages:
+...with checks if the access is valid and descriptive error messages:
 ```python
     >>> Thing.Zap().hmm  # only `Bar`s have a `hmm` field
     Traceback (most recent call last):
@@ -60,7 +67,7 @@ Accessors for every field:
     AttributeError: Unknown attribute: Field 'blah_blah_blah' not declared in any variant of 'Thing'...
 ```
 
-A nice `__repr__()`:
+The values also have a nice `__repr__()`:
 ```python
     >>> foo; bar; zap
     Thing.Foo(x=3, y=5)
@@ -186,7 +193,7 @@ And that's everything... for now!
 
 ### Should I use it?
 Yeah! I didn't just build this library because I thought it'd be nice –
-I'm using it heavily in an app I'm developing.
+I'm using it heavily in an app I'm developing and a few smaller projects.
 Saying that it's battle-tested is a bit much, but it's getting there.
 
 
