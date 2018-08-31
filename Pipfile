@@ -10,4 +10,5 @@ url = "https://pypi.org/simple"
 python_version = "3.5"
 
 [packages]
-"7c4da24" = {editable = true, path = ".\\..\\indented"}
+pytypes = "*"
+indented = "*"
