@@ -17,7 +17,7 @@ Suggestions, feedback and contributions are very welcome!
 
 
 
-### A quick tour
+## A quick tour
 ```python
     >>> from sumtype import sumtype
     >>>
@@ -83,9 +83,9 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 ¹ At least I like to think so ;)  I try to do my best with profiling things though!
 
 
-### Features
+## Features
 
-#### Equality and hashing
+### Equality and hashing
 ```python
     >>> Thing.Foo(1,2) == Thing.Foo(1,2)
     True
@@ -101,7 +101,7 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 so the values must all implement the relevant method for it to work.*
 
 
-#### Modifying values
+### Modifying values
 ```python
     >>> foo;  foo.replace(x=99)
     Thing.Foo(x=3, y=5)
@@ -117,7 +117,7 @@ so the values must all implement the relevant method for it to work.*
 So even if you have a field called `replace`, you can still use `my_value._replace(x=15)`.*
 
 
-#### Pattern matching
+### Pattern matching
 ##### Statement form:
 ```python
     >>> def do_something(val: Thing):
@@ -148,7 +148,7 @@ So even if you have a field called `replace`, you can still use `my_value._repla
 ```
 
 
-#### Conversions between `sumtypes` and standard types
+### Conversions between `sumtypes` and standard types
 To...
 ```python
     >>> foo.values();  foo.values_dict();
@@ -169,7 +169,7 @@ To...
 Also, `x == Thing.from_tuple(x.as_tuple())` and `x == Thing.from_dict(x.as_dict())`.
 
 
-#### Pickle support
+### Pickle support
 ```python
     >>> import pickle
     >>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', 'two'), Thing.Zap()]
@@ -183,7 +183,7 @@ There's also tests in `sumtype.tests` to ensure that it all works correctly.
 And that's everything... for now!
 
 
-### Features coming in `1.0`
+## Features coming in `1.0`
 - Default values
 *(easy, just haven't gotten around to it yet)*
 
@@ -192,13 +192,13 @@ And that's everything... for now!
 `typing` does not expose a way to check if a value matches a type like that)*
 
 
-### Should I use it?
+## Should I use it?
 Yeah! I didn't just build this library because I thought it'd be nice –
 I'm using it heavily in an app I'm developing and a few smaller projects.
 Saying that it's battle-tested is a bit much, but it's getting there.
 
 
-### Possible future features
+## Possible future features
 
 - `mypy` support.
 Unfortunately, last time I checked, `mypy` didn't handle metaclass-created classes too well, but that might have changed.
