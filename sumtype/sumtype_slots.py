@@ -847,8 +847,7 @@ def sumtype(
 
 		constructor = classmethod(constructor)
 		# constructor = functools.wraps(constructor)(typechecked(constructor))
-		ple_ple_ple = variant
-		setattr(Class, ple_ple_ple, constructor)
+		setattr(Class, variant, constructor)
 		constructors.append(getattr(Class, variant)) # get the bound classmethod
 
 	Class._constructors = tuple(constructors)
