@@ -7,8 +7,6 @@ if __name__ == '__main__':
 	print('Adding', str(parent_package_location), 'to sys.path to enable import\n')
 	sys.path.append(str(parent_package_location))
 
-
-
 import typing as t
 from sumtype import sumtype
 
@@ -18,12 +16,29 @@ class Thing(sumtype):
 	def Foo(x: int, y: int): ...
 	def Bar(y: str): ...
 	# def Zip(hey: str): ...
-	def Zip(hey): ...
+	def Zip(hey: t.Tuple[float, float]): ...
 	def Bop(): ...
-	# ^ constructor stubs (will be filled in by sumtype)
 
-help(Thing)
 
+print('\n\n\n--------------')
 f = Thing.Foo(3, 5)
-f = f.replace(y=99)
-print(f.x, f.y)
+b = Thing.Bar('abc')
+z = Thing.Zip((3.5, 6.7))
+d = Thing.Bop()
+
+try: res = Thing.Foo('x', 'y')
+except TypeError as e: res = e
+print(repr(res))
+print()
+
+print(Thing.from_tuple(('Foo', 100, 200)))
+try: res = Thing.from_tuple(('Foo', 'x', 'y'))
+except TypeError as e: res = e
+print(repr(res))
+print()
+
+print(repr(f.replace(x=15)))
+try: res = f.replace(x='a')
+except TypeError as e: res = e
+print(repr(res))
+print()
