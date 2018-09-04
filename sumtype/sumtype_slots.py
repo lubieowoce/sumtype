@@ -1,6 +1,6 @@
 from typing import (
 	Any,
-	Tuple, List, Iterator, Union,
+	Tuple, List, Iterator, Union, Optional,
 	Callable,
 	TypeVar,
 	NoReturn, # functions that always raise or exit the interpreter 
@@ -302,8 +302,17 @@ def sumtype(
 
 		# Methods that always raise
 
-		def impossible(self) -> NoReturn:
-			raise self.__class__._get_invalid_variant_error(self._variant_id)
+		def _impossible(self, msg: Optional[str] = None) -> NoReturn:
+			"A helper for raising errors related to unexpected variants"
+			cls = self.__class__
+			if self._variant_id not in cls._variant_ids:
+				raise self.__class__._get_invalid_variant_error(self._variant_id)
+			elif msg:
+				raise RuntimeError(msg)
+			else:
+				raise RuntimeError('Value {!r} should never occur here'.format(self))
+
+		impossible = _impossible
 
 
 		def _raise_error_missing_descriptor(self, attr: str) -> NoReturn:
