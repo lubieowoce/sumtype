@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "631264bfd9cb8336525847d499afc8cda926b8f5b160914d1deb35da2d1e5a54"
+            "sha256": "bd6a39bb911ea7e8ebc5c7b034b10f2e487f56d7e69913df6f87df5154b1f81b"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -16,9 +16,24 @@
         ]
     },
     "default": {
-        "7c4da24": {
+        "indented": {
+            "hashes": [
+                "sha256:57de7ad8d9b1b531ed367e1ae23caa8b8fd50d419607ac5bdbc634fbb09efcf4"
+            ],
+            "index": "pypi",
+            "version": "==0.9.0"
+        },
+        "pytypes": {
             "editable": true,
-            "path": ".\\..\\indented"
+            "path": "./../pytypes"
+        },
+        "typeguard": {
+            "hashes": [
+                "sha256:13ecd6ca9cd4a8b7965138c5782e3ab3711096f573c91b3ce120ac4764a6a233",
+                "sha256:b8ddc6e2e60bd64b7003f9a685a09ba387b74adf2f6bea7534a76d61892f573e"
+            ],
+            "index": "pypi",
+            "version": "==2.2.2"
         }
     },
     "develop": {

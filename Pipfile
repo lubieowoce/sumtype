@@ -10,5 +10,6 @@ url = "https://pypi.org/simple"
 python_version = "3.5"
 
 [packages]
-pytypes = "*"
 indented = "*"
+pytypes = {path = "./../pytypes", editable = true}
+typeguard = "*"
