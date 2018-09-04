@@ -175,11 +175,32 @@ def test_thing(Thing):
 	assert res, '{!r} failed for {!r}'.format(expr, (C1, C2, args))
 
 
+	expr = 'x == x.copy()'
+	for x in values:
+		res = eval(expr)
+		assert res, '{!r} failed for {!r}'.format(expr, x)
+
+
 	expr = 'x is not x.copy()'
 	for x in values:
 		res = eval(expr)
 		assert res, '{!r} failed for {!r}'.format(expr, x)
 
+	# kwargs1 = ((3, 5,),  ("nice",), (15.234,), ())
+	# kwargs2 = ((0, 10,), ("bad",),  (3.1415,), ())
+	from collections import OrderedDict
+	assert len(Thing._variant_id_fields) == len(args2), '{} !~= {}'.format(Thing._variant_id_fields, args2)
+	kwargs2 = [OrderedDict(b.zip(fields, args)) for (fields, args) in b.zip(Thing._variant_id_fields, args2)]
+	
+	left  = 'x._constructor(**kwargs)'
+	right = 'x._replace(**kwargs)'
+	left_  = eval('lambda x, kwargs: '+left)
+	right_ = eval('lambda x, kwargs: '+right) 
+	for (x_, kwargs_) in b.zip(values, kwargs2):
+		vleft  = left_ (x_, kwargs_)
+		vright = right_(x_, kwargs_)
+		res = vleft == vright
+		assert res, '\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'.format(left, vleft, right, vright, (x_, kwargs_),)
 
 	bar2 = bar.replace(y="better")
 	assert bar2.y == "better", repr(bar2)

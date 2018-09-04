@@ -237,10 +237,19 @@ def sumtype(
 
 		@property
 		def _variant(self) -> str:
+			"The name of the variant"
 			return self.__class__._variants[self._variant_id]
 		variant = _variant
 
-		def _values_dict(self) -> dict:
+
+		@property
+		def _constructor(self):
+			"The constructor used to build self"
+			cls = self.__class__
+			return getattr(cls, self._variant)
+		
+
+		def _values_dict(self) -> OrderedDict:
 			dct = self._as_dict()
 			del dct['variant']
 			return dct
@@ -271,21 +280,16 @@ def sumtype(
 			return hash(self._as_tuple())
 
 
-		def _copy(self) -> typename:
+		def __copy__(self) -> typename:
 			""" Returns a shallow copy of self. """
-			# TODO: efficiency - codegen it
 			cls = self.__class__
 
 			new = cls.__new__(cls)
-			variant_id_descriptor = cls._variant_id
-			variant_id_descriptor.__set__(new, self._variant_id)
-
-			for field_descriptor in cls._positional_descriptors[ : len(cls._variant_id_fields[self._variant_id])]:
-				field_val = field_descriptor.__get__(self)
-				field_descriptor.__set__(new, field_val)
+			new.__setstate__(self.__getstate__())
 			return new
 
-		copy = _copy
+		_copy = __copy__
+		copy  = __copy__
 		
 
 		# Pickle methods
