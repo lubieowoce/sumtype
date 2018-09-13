@@ -14,7 +14,7 @@ from sumtype import sumtype
 class Thing(sumtype):
 	# def Foo(x: t.Tuple[int, str], y: int): ...
 	def Foo(x: int, y: int): ...
-	def Bar(y: str): ...
+	def Bar(y: t.List[str]): ...
 	# def Zip(hey: str): ...
 	def Zip(hey: t.Tuple[float, float]): ...
 	def Bop(): ...
@@ -22,11 +22,23 @@ class Thing(sumtype):
 
 print('\n\n\n--------------')
 f = Thing.Foo(3, 5)
-b = Thing.Bar('abc')
+b = Thing.Bar(['abc', 'def'])
 z = Thing.Zip((3.5, 6.7))
 d = Thing.Bop()
 
+
 try: res = Thing.Foo('x', 'y')
+except TypeError as e: res = e
+print(repr(res))
+print()
+
+# res = Thing.Bar([1, 2, '3'])
+try: res = Thing.Bar([1, 2, '3'])
+except TypeError as e: res = e
+print(repr(res))
+print()
+
+try: res = Thing.Zip(('x', 'y'))
 except TypeError as e: res = e
 print(repr(res))
 print()
