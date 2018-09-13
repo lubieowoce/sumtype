@@ -6,8 +6,6 @@ from typing import (
 	NoReturn, # functions that always raise or exit the interpreter 
 )
 
-import typeguard
-
 from indented.text    import flatten_tree
 from indented.codegen import (
 	lit, apply, 
@@ -17,12 +15,7 @@ from indented.codegen import (
 	eval_def,
 )
 
-# try:
-# 	from pytypes import typechecked
-# 	PYTYPES_AVAILABLE = True
-# except ImportError:
-# 	typechecked = lambda f: f
-# 	PYTYPES_AVAILABLE = False
+import typeguard
 
 Fun = Callable
 A = TypeVar('A')

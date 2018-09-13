@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "bd6a39bb911ea7e8ebc5c7b034b10f2e487f56d7e69913df6f87df5154b1f81b"
+            "sha256": "3b735f895f8606ea51671f232d489bcfcb6d2fdf8cef0ae313ccf8c225f11088"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -22,10 +22,6 @@
             ],
             "index": "pypi",
             "version": "==0.9.0"
-        },
-        "pytypes": {
-            "editable": true,
-            "path": "./../pytypes"
         },
         "typeguard": {
             "hashes": [

@@ -11,5 +11,4 @@ python_version = "3.5"
 
 [packages]
 indented = "*"
-pytypes = {path = "./../pytypes", editable = true}
 typeguard = "*"
