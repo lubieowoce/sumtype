@@ -2,9 +2,10 @@ from typing import (
 	Any,
 	Tuple, List, Iterator, Union, Optional,
 	Callable,
-	TypeVar,
+	Generic, TypeVar,
 	NoReturn, # functions that always raise or exit the interpreter 
 )
+import typing
 
 import typeguard
 
@@ -148,6 +149,7 @@ def sumtype(
 		typename: str,
 		variant_specs: List[  Tuple[str, List[Tuple[str, type]] ]  ],
 		*,
+		type_parameters=None,
 		typecheck=True,
 		immutable=True,
 		verbose=False,
@@ -186,15 +188,129 @@ def sumtype(
 
 	max_n_fields = max((len(attrs) for attrs in variant_attr_names), default=0)
 	slots = ('_variant_id',) + tuple('_{}'.format(i) for i in range(max_n_fields))
+	bases = ()
+	attrs_with_setattr_enabled = ()
+	meta_kwargs = {}
+
+	if type_parameters:
+		bases = bases + (Generic[type_parameters],)
+		if typecheck:
+			slots = slots + ('__orig_class__',)
+			attrs_with_setattr_enabled = attrs_with_setattr_enabled + ('__orig_class__',)
+
+	# if typecheck and type_parameters:
+	# 	import traceback
+	# 	import sys
+	# 	# import inspect
+	# 	print('patching GenericMeta')
+	# 	genericmeta_instancecheck = typing.GenericMeta.__instancecheck__
+	# 	genericmeta_subclasscheck = typing.GenericMeta.__subclasscheck__
+
+	# 	def __instancecheck__(cls, obj):
+	# 		if not hasattr(cls, '__is_sumtype__'):
+	# 			print('{}.__instancecheck__({})'.format(cls, obj), '(original)')
+	# 			return genericmeta_instancecheck(cls, obj)
+				
+	# 		print('{}.__instancecheck__({})'.format(cls, obj), '(patched)')
+	# 		c = cls
+	# 		oc = obj.__class__
+	# 		if getattr(c, '__origin__', None) is not None:
+	# 			c = c.__origin__
+	# 		if getattr(oc, '__origin__', None) is not None:
+	# 			oc = oc.__origin__
+
+	# 		if c is oc:
+	# 			print('cls.__args__:', cls.__args__)
+	# 			params = cls.__orig_bases__[0].__args__
+	# 			print('params:      ', params)
+	# 			concrete_cls = obj.__orig_class__
+	# 			param_values = concrete_cls.__args__
+	# 			print('param_values:', param_values)
+	# 			bound_types = dict(zip(params, param_values))
+	# 			print('bound_types:', bound_types)
+	# 			spec = cls._variant_specs[obj._variant]
+	# 			for (val, (field, exp_type)) in zip(obj._values(), spec):
+	# 				if isinstance(exp_type, typing.TypeVar):
+	# 					if bound_types[exp_type] is not type(val):
+	# 						print('nope: {} != {}'.format(exp_type), type(val))
+	# 						return False
+	# 			return True
+	# 		else:
+	# 			print('nope')
+	# 			return False
+
+	# 	def __subclasscheck__(cls, sub):
+	# 		print(dir(cls))
+	# 		print('--------------')
+	# 		traceback.print_stack(inspect.currentframe().f_back, file=sys.stdout)
+	# 		print('--------------')
+
+	# 		if not hasattr(cls, '__is_sumtype__'):
+	# 			ret = genericmeta_subclasscheck(cls, sub)
+	# 			print('{}.__subclasscheck__({})'.format(cls, sub), '(original) -->', ret)
+	# 			return ret
+			
+	# 		ret = cls is sub
+	# 		print('{}.__subclasscheck__({})'.format(cls, sub), '(patched) -->', ret)
+	# 		return ret
+
+	# 	typing.GenericMeta.__instancecheck__ = __instancecheck__
+	# 	typing.GenericMeta.__subclasscheck__ = __subclasscheck__
+
+
+	if typecheck and type_parameters:
+		class GenericInstanceCheck(typing.GenericMeta):
+			def __instancecheck__(cls, obj):
+				print('{}.__instancecheck__({})'.format(cls, obj))
+				c = cls
+				oc = obj.__class__
+				if getattr(c, '__origin__', None) is not None:
+					c = c.__origin__
+				if getattr(oc, '__origin__', None) is not None:
+					oc = oc.__origin__
+
+				if c is oc:
+					cls_tvar_values = cls.__args__
+					print('cls_tvar_values:', cls_tvar_values)
+					class_with_substituted_tvars = getattr(obj, '__orig_class__', None)
+					obj_tvar_values              = getattr(class_with_substituted_tvars, '__args__', None)
+					print('obj_tvar_values:', obj_tvar_values)
+
+					if cls_tvar_values and obj_tvar_values:
+						return cls.__args__ == obj_tvar_values
+					elif not cls_tvar_values and obj_tvar_values:
+						return True
+
+					# cls_tvar_values and not obj_tvar_values	
+
+					tvars = cls.__orig_bases__[0].__args__
+					print('tvars:      ', tvars)
+					cls_bound_types = dict(zip(tvars, cls_tvar_values))
+					print('cls_bound_types:', cls_bound_types)
+					spec = cls._variant_specs[obj._variant]
+
+					for (val, (field, declared_type)) in zip(obj._values(), spec):
+						if isinstance(declared_type, typing.TypeVar):
+							if cls_bound_types[declared_type] is not type(val):
+								print('field {!r}: {} - {} != {}'.format(field, declared_type, cls_bound_types[declared_type], type(val)))
+								return False
+					return True
+				else:
+					print('nope')
+					return False
+		meta_kwargs = {'metaclass': GenericInstanceCheck}
+	
 	if verbose:
 		print('class {}:'.format(typename))
 		print('__slots__ =', slots, end='\n\n')
 		print('...', end='\n\n')
 
 
-
-	class Class:
+	class Class(*bases, **meta_kwargs):
 		__slots__ = slots
+
+		__is_sumtype__ = True
+		_attrs_with_setattr_enabled = attrs_with_setattr_enabled
 		_variants    = variant_names
 		_variant_ids = tuple(variant_ids)
 		_variant_fields = OrderedDict(
@@ -232,7 +348,8 @@ def sumtype(
 					type=cls.__name__, vars=cls._variants_repr()
 				)
 			)
-		__init__ = raise_direct_init_forbidden
+		if not (typecheck and type_parameters):
+			__init__ = raise_direct_init_forbidden
 
 
 		@property
@@ -354,19 +471,20 @@ def sumtype(
 
 
 
-		if immutable:
-			def _raise_setattr_forbidden(self, attr: str, val) -> NoReturn:
-				"""
-				A fake __setattr__ implemented only to give better error messages
-				for attribute modification attempts.
-				"""
-				raise TypeError(
-					"Cannot modify '{type}' values. Use `myval2 = myval.replace(attr=x)` instead. (Tried to set {self}.{field} = {val!r})".format(
-						type=self.__class__.__qualname__, self=self, field=attr, val=val,
-					)
-				)
-			__setattr__ = _raise_setattr_forbidden
+		# if immutable:
+		# 	def _raise_setattr_forbidden(self, attr: str, val) -> NoReturn:
+		# 		"""
+		# 		A fake __setattr__ implemented only to give better error messages
+		# 		for attribute modification attempts.
+		# 		"""
+		# 		raise TypeError(
+		# 			"Cannot modify '{type}' values. Use `myval2 = myval.replace(attr=x)` instead. (Tried to set {self}.{field} = {val!r})".format(
+		# 				type=self.__class__.__qualname__, self=self, field=attr, val=val,
+		# 			)
+		# 		)
+		# 	__setattr__ = _raise_setattr_forbidden
 
+		# if attrs_with_setattr_enabled:
 
 
 		def _raise_delattr_forbidden(self, attr: str) -> NoReturn:
@@ -381,7 +499,8 @@ def sumtype(
 			)
 		__delattr__ = _raise_delattr_forbidden
 
-		
+
+
 		@classmethod
 		def _variant_reprs(cls) -> Iterator[str]:
 			return (
@@ -496,7 +615,7 @@ def sumtype(
 	# For example `._values()` could just call `._as_tuple()`,
 	# but at the cost of allocating a tuple and then another one without the first value.
 	# A compiler could skip creating that tuple because it
-	# immediately gets deconstructed or inline the code, but Python is interpreted.
+	# immediately gets deconstructed, or inline the code, but Python is interpreted.
 
 	if not _set_members_with_assignment:
 		_set_attr = 'cls._unsafe_set_{attr}({obj}, {val})'
@@ -763,7 +882,7 @@ def sumtype(
 	]
 
 	mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
-		'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _=...):', [
+		'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
 			'_variant_id = _self._variant_id',
 			*cond(
 				[
@@ -816,6 +935,20 @@ def sumtype(
 	Class._match = _match
 	Class.match  = _match 
 
+	# if hasattr(val, '__orig_class__'):
+	# 	params = cls.__args__
+	# 	concrete_cls = obj.__orig_class__
+	# 	param_values = concrete_cls.__args__
+	# 	bound_types = dict(zip(params, param_values))
+	# 	spec = cls._variant_specs[obj._variant]
+	# 	for (val, (field, exp_type)) in zip(obj._values(), spec):
+	# 		if isinstance(exp_type, typing.TypeVar):
+	# 			if bound_types[exp_type] is not type(val):
+	# 				return False
+	# 	return True
+	# else:
+	# 	return False
+
 	# constructors
 	if not _set_members_with_assignment:
 		def mk_def_constructor(typename, id_, variant, fields, types):
@@ -837,7 +970,6 @@ def sumtype(
 				],
 			]
 	else:
-
 		mk_def_constructor = lambda typename, id_, variant, fields, types: [
 			def_(variant, ['_cls', *fields]), [
 				'_val = _cls.__new__(_cls)',
@@ -892,7 +1024,11 @@ def sumtype(
 
 		constructor.__qualname__ = '{}.{}'.format(typename, constructor.__name__)
 		constructor.__annotations__ = {field: type_ for (field, type_) in fields_and_types if (type_ is not Any) and (type_ is not object)}
-		constructor.__annotations__['return'] = Class
+		# constructor.__annotations__['_cls'] = typing.Type[Class[type_parameters] if type_parameters else Class]
+		constructor.__annotations__['return'] = Class[type_parameters] if type_parameters else Class
+		# cls_type = typing.TypeVar(typename, bound=Class)
+		# constructor.__annotations__['_cls'] = typing.Type[cls_type]
+		# constructor.__annotations__['return'] = cls_type
 		if fields:
 			constructor = maybe_typechecked(constructor)
 		constructor = classmethod(constructor)
