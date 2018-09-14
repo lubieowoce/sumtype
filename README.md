@@ -18,26 +18,28 @@ Suggestions, feedback and contributions are very welcome!
 ## A quick tour
 ```python
     >>> from sumtype import sumtype
+    >>> from typing import Tuple
     >>>
     >>> class Thing(sumtype):
     ...     def Foo(x: int, y: int): ...
-    ...     def Bar(y: str, hmm: str): ...
+    ...     def Bar(y: str, hmm: Tuple[str, str]): ...
     ...     def Zap(): ...
     ...
     >>>
 ```
 This means that a `Thing` value can be one of three variants:
 - a `Foo` with two `int` fields, `x` and `y`
-- a `Bar` with two `string` fields, `y` and `hmm`
+- a `Bar` with a `string` field `y` and a `List[str]` field `hmm`
 - a `Zap` with no fields
 
+If type annotations are provided, the constructors will typecheck the arguments (see [Typechecking](https://github.com/lubieowoce/sumtype#typechecking))
 You can also add your own docstring and methods in the class definition.
 If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see `Thing2` in `sumtype.sumtype.demo()` for an example.
 
 #### Creating values and attribute access
 ```python
     >>> foo = Thing.Foo(x=3, y=5)          # named arguments
-    >>> bar = Thing.Bar('hello', 'world')  # positional arguments
+    >>> bar = Thing.Bar('hello', ('wo', 'rld'))  # positional arguments
     >>> zap = Thing.Zap()
 ```
 Note that they're still just different values of the same type, not subclasses:
@@ -51,7 +53,7 @@ Every specified field gets an accessor:
     >>> foo.x, foo.y;
     (3, 5)
     >>> bar.y,  bar.hmm
-    ('hello', 'world')
+    ('hello', ('wo', 'rld'))
 ```
 ...with checks if the access is valid and descriptive error messages:
 ```python
@@ -70,7 +72,7 @@ The values also have a nice `__repr__()`:
 ```python
     >>> foo; bar; zap
     Thing.Foo(x=3, y=5)
-    Thing.Bar(y='hello', hmm='world')
+    Thing.Bar(y='hello', hmm=('wo', 'rld'))
     Thing.Zap()
 ```
 
@@ -83,11 +85,38 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 
 ## Features
 
+### Typechecking
+`sumtype` uses [`typeguard`](https://github.com/agronholm/typeguard) to typecheck the fields:
+```python
+    >>> # Foo(x: int, y: int) -> Thing
+    >>> Thing.Foo(x=1, y=2)
+    Thing.Foo(x=1, y=2)
+    >>> Thing.Foo(x='should be an int', y=2)
+    Traceback (most recent call last):
+      ...
+    TypeError: type of argument "x" must be int; got str instead
+```
+`typing` annotations will be typechecked too:
+```python
+    >>> # Bar(y: str, hmm: Tuple[str, str]) -> Thing
+    >>> Thing.Bar(y='a', hmm=('b', 'c'))
+    Thing.Bar(y='a', hmm=('b', 'c'))
+    >>> Thing.Bar(y='a', hmm=(1, 2))
+    Traceback (most recent call last):
+      ...
+    TypeError: type of argument "hmm"[0] must be str; got int instead
+```
+[`typeguard`](https://github.com/agronholm/typeguard) supports all `typing` constructs (`Tuple`, `List`, `Dict`, `Union`, etc).
+(See their [README](https://github.com/agronholm/typeguard/blob/master/README.rst) for a full list)
+However, as of `2.2.2` it doesn't support user-defined generic classes, so fields like `z: MyList[float]` will not be checked. 
+This also prevents us from defining generic sumtypes (e.g. `Maybe[A]`, `Either[A, B]`), but I'm working on resolving this issue.
+
+
 ### Equality and hashing
 ```python
     >>> Thing.Foo(1,2) == Thing.Foo(1,2)
     True
-    >>> Thing.Foo(1,2) == Thing.Bar('a', 'b');
+    >>> Thing.Foo(1,2) == Thing.Bar('a', ('b', 'c'));
     False
     >>> {foo, foo, bar, zap} == {foo, bar, zap}
     True
@@ -105,9 +134,9 @@ so the values must all implement the relevant method for it to work.*
     Thing.Foo(x=3, y=5)
     Thing.Foo(x=99, y=5)
     >>>
-    >>> bar;  bar.replace(y='abc', hmm='xyz')
-    Thing.Bar(y='hello', hmm='world')
-    Thing.Bar(y='abc', hmm='xyz')
+    >>> bar;  bar.replace(y='abc', hmm=('d', 'e'))
+    Thing.Bar(y='hello', hmm=('wo', 'rld'))
+    Thing.Bar(y='abc', hmm=('d', 'e'))
 ```
 `foo.replace(x=99)` returns a new value, just like in `namedtuple`.
 
@@ -122,7 +151,7 @@ So even if you have a field called `replace`, you can still use `my_value._repla
     ...     if val.is_Foo():
     ...         print(val.x * val.y)
     ...     elif val.is_Bar():
-    ...         print('The result is', val.y, val.hmm)
+    ...         print('The result is', val.y, ''.join(val.hmm))
     ...     elif val.is_Zap():
     ...         print('Whoosh!')
     ...     else: val.impossible() # throws an error - nice if you like having all cases covered
@@ -170,10 +199,10 @@ Also, `x == Thing.from_tuple(x.as_tuple())` and `x == Thing.from_dict(x.as_dict(
 ### Pickle support
 ```python
     >>> import pickle
-    >>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', 'two'), Thing.Zap()]
+    >>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', ('two', 'three')), Thing.Zap()]
     >>> vals2 = pickle.loads(pickle.dumps(vals))
     >>> vals;  vals == vals2
-    [Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm='two'), Thing.Zap()]
+    [Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm=('two', 'three')), Thing.Zap()]
     True
 ```
 
@@ -185,9 +214,7 @@ And that's everything... for now!
 - Default values
 *(easy, just haven't gotten around to it yet)*
 
-- Argument typechecking – always, or in `__debug__` mode only
-*(less easy because of `typing` annotations like `Tuple[int, str]` –
-`typing` does not expose a way to check if a value matches a type like that)*
+- Control over argument typechecking – always, in `__debug__` mode only, or never *(same as above)*
 
 
 ## Should I use it?
