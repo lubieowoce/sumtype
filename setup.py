@@ -10,11 +10,16 @@ setup(
 	name     = 'sumtype',
 	version  = '0.9.5.post2',
 	packages = find_packages(exclude=['tests']),
+	
+	python_requires = '>=3',
 	install_requires = [
 		'indented',
 		'typing;python_version < "3.5"',
 	],
-	python_requires = '>=3',
+	tests_require = [
+		'pytest',
+		'hypothesis',
+	],
 
 	description      = 'A namedtuple-style library for defining immutable sum types in Python.',
 	long_description = long_description,
