@@ -114,7 +114,8 @@ if the contents are actually `floats`.
 This also prevents us from defining generic sumtypes (e.g. `ConsList[A]`, `Maybe[A]`, `Either[A, B]`), but I'm working on resolving this issue.
 
 Typechecking can be controlled with the `typecheck` argument: `class Thing(sumtype, typecheck='always'|'debug'|'never'):`.
-Fields with no annotations will not be typechecked, and it is possible to mix annotated an non-annotated fields in a definition.
+The default mode is `'always'`
+Fields with no annotations will not be typechecked, and you can mix annotated and non-annotated fields in a definition.
 
 
 ### Equality and hashing
@@ -143,7 +144,8 @@ so the values must all implement the relevant method for it to work.*
     Thing.Bar(y='hello', hmm=('wo', 'rld'))
     Thing.Bar(y='abc', hmm=('d', 'e'))
 ```
-`foo.replace(x=99)` returns a new value, just like in `namedtuple`.
+`foo.replace(x=99)` returns a new value, just like in `namedtuple`. 
+`.replace` behaves just like the constructors w.r.t. typechecking.
 
 > **Note**: *`replace` and all the other methods have underscored aliases (`_replace`).
 So even if you have a field called `replace`, you can still use `my_value._replace(x=15)`.*
