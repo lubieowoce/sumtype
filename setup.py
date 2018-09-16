@@ -15,6 +15,7 @@ setup(
 	install_requires = [
 		'indented',
 		'typing;python_version < "3.5"',
+		'typeguard',
 	],
 	tests_require = [
 		'pytest',
