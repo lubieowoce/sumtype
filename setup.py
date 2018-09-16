@@ -8,14 +8,14 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
 	name     = 'sumtype',
-	version  = '0.10.0.post1',
+	version  = '0.10.0.post2',
 	packages = find_packages(exclude=['tests']),
 	
 	python_requires = '>=3',
 	install_requires = [
 		'indented',
-		'typing;python_version < "3.5"',
 		'typeguard',
+		'typing;python_version < "3.5"',
 	],
 	tests_require = [
 		'pytest',
