@@ -29,7 +29,7 @@ Suggestions, feedback and contributions are very welcome!
 ```
 This means that a `Thing` value can be one of three variants:
 - a `Foo` with two `int` fields, `x` and `y`
-- a `Bar` with a `string` field `y` and a `List[str]` field `hmm`
+- a `Bar` with a `str` field `y` and a `Tuple[str, str]` field `hmm`
 - a `Zap` with no fields
 
 If type annotations are provided, the constructors will typecheck the arguments (see [Typechecking](https://github.com/lubieowoce/sumtype#typechecking))
