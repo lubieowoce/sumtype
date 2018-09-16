@@ -125,7 +125,7 @@ def untyped_sumtype(
 		sumtype(
 			typename,
 			variant_specs,
-			typecheck=False,
+			typecheck='never',
 			# pass the rest through unchanged
 			immutable=immutable,
 			verbose=verbose,
@@ -141,16 +141,16 @@ def sumtype(
 		typename: str,
 		variant_specs: List[  Tuple[str, List[Tuple[str, type]] ]  ],
 		*,
-		typecheck=True,
+		typecheck='always',
 		immutable=True,
 		verbose=False,
 		allow_zero_constructors=False,
 		_module_name=None,
 		_set_members_with_assignment=False
 	) -> type:
-
-	# if typecheck:
-	# 	raise NotImplementedError('Typechecking is not supported yet')
+	"""
+	`typecheck` must be one of ('always', 'debug', 'never')
+	"""
 
 	if not immutable:
 		raise NotImplementedError('Mutability is not supported yet')
@@ -171,7 +171,14 @@ def sumtype(
 	variant_attr_names = [[attr_name for (attr_name, _) in attr_names_and_types] for attr_names_and_types in variant_attr_specs]
 	variant_attr_types = [[attr_type for (_, attr_type) in attr_names_and_types] for attr_names_and_types in variant_attr_specs]
 
-	maybe_typechecked = typeguard.typechecked if typecheck else (lambda x: x)
+	typecheck_opts = {
+		'always': typeguard.typechecked(always=True),
+		'debug' : typeguard.typechecked,
+		'never' : (lambda x: x),
+	}
+	maybe_typechecked = typecheck_opts.get(typecheck, None)
+	if maybe_typechecked is None:
+		raise ValueError("Argument 'typecheck' must be one of {!r}; got {!r}".format(tuple(typecheck_opts.keys())))
 
 	# variant_attr_names = [attr_names for (variant_name, attr_names) in variant_specs]
 	variant_ids = range(len(variant_names))
@@ -632,32 +639,35 @@ def sumtype(
 	Class.__getstate__ = __getstate__
 
 
-	def mk_def_replace(typename, immutable, typecheck, variant_ids, variants, variant_id_fields, _set_attr):
+	def mk_def_replace(typename, immutable, typecheck, variant_ids, variants, variant_id_fields, variant_id_types, _set_attr):
 		with_fields    = [
-			(id_, variant, fields)
-			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			(id_, variant, fields, types)
+			for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
 			if fields
 		]
 		without_fields = [
-			(id_, variant, fields)
-			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			(id_, variant, fields, types)
+			for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
 			if not fields
 		]
 
-		if typecheck:
-			set_fields = lambda variant, fields: \
+		if typecheck == 'always' or (typecheck == 'debug' and __debug__):
+			set_fields = lambda variant, fields, types: \
 				[tuple_(field+'_type' for field in fields)+' = cls._variant_id_types[variant_id]',
 				 ''] \
 				+ \
 				concat(
 					['new_{field} = fields_and_new_vals_pop("{field}", self._{attr})'.format(field=field, attr=(variant+'_'+field)),
-					 'cls.assert_type(\'field "{field}"\', new_{field}, {field}_type)'.format(field=field),
+					 *(['cls.assert_type(\'field "{field}"\', new_{field}, {field}_type)'.format(field=field)]
+					   if type_ is not Any and type_ is not object else []
+					  ),
 					 _set_attr.format(obj='new', attr=(variant+'_'+field), val='new_'+field),
-					 '']
-					 for field in fields
+					 ''
+					]
+					 for (field, type_) in zip(fields, types)
 				)
 		else:
-			set_fields = lambda variant, fields: [
+			set_fields = lambda variant, fields, _types: [
 				 _set_attr.format(obj='new', attr=(variant+'_'+field), val='fields_and_new_vals_pop("{field}", self._{attr})'.format(field=field, attr=(variant+'_'+field)))
 				 for field in fields
 			]
@@ -684,7 +694,7 @@ def sumtype(
 					# nothing to do on variants with no fields
 					([when(
 						join_with_op(
-							['variant_id == '+lit(id_) for (id_, _, _) in without_fields],
+							['variant_id == '+lit(id_) for (id_, _, _, _) in without_fields],
 							op='or', zero=False,
 						),
 						['if not fields_and_new_vals: return new'])
@@ -692,11 +702,11 @@ def sumtype(
 					+
 					# variants with fields
 					[ when('variant_id == '+lit(id_), 
-						set_fields(variant, fields)
+						set_fields(variant, fields, types)
 						+
 						['if not fields_and_new_vals: return new']
 					  )
-					  for (id_, variant, fields) in with_fields
+					  for (id_, variant, fields, types) in with_fields
 					],
 					default=['raise cls._get_invalid_variant_error(variant_id)'],
 					allow_zero_cases=True,
@@ -732,6 +742,7 @@ def sumtype(
 				variant_ids=Class._variant_ids,
 				variants=Class._variants,
 				variant_id_fields=Class._variant_id_fields,
+				variant_id_types=Class._variant_id_types,
 				_set_attr=_set_attr,
 			)
 		) 

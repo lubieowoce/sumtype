@@ -5,7 +5,7 @@ A `namedtuple`-style library for defining immutable **sum types** in Python. ([G
 > they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++. 
 > If you haven't heard about them yet, [here's](https://chadaustin.me/2015/07/sum-types/) a nice introduction.*
 
-The current version is `0.9.5`, quickly approaching `1.0`.
+The current version is `0.10.0`, quickly approaching `1.0`.
 The library supports Python 3.x.
 The core code has lived in various `utils` folders for about a year,
 before I got tired of copying it around and decided to release it as an independent package.
@@ -86,6 +86,7 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 ## Features
 
 ### Typechecking
+
 `sumtype` uses [`typeguard`](https://github.com/agronholm/typeguard) to typecheck the fields:
 ```python
     >>> # Foo(x: int, y: int) -> Thing
@@ -96,7 +97,7 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
       ...
     TypeError: type of argument "x" must be int; got str instead
 ```
-`typing` annotations will be typechecked too:
+`typing` annotations are supported too:
 ```python
     >>> # Bar(y: str, hmm: Tuple[str, str]) -> Thing
     >>> Thing.Bar(y='a', hmm=('b', 'c'))
@@ -108,8 +109,12 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 ```
 [`typeguard`](https://github.com/agronholm/typeguard) supports all `typing` constructs (`Tuple`, `List`, `Dict`, `Union`, etc).
 (See their [README](https://github.com/agronholm/typeguard/blob/master/README.rst) for a full list)
-However, as of `2.2.2` it doesn't support user-defined generic classes, so fields like `z: MyList[float]` will not be checked. 
-This also prevents us from defining generic sumtypes (e.g. `Maybe[A]`, `Either[A, B]`), but I'm working on resolving this issue.
+However, as of `2.2.2` it doesn't support user-defined generic classes, so for a field like `z: UserDefinedList[float]`, `typeguard` will not check
+if the contents are actually `floats`. 
+This also prevents us from defining generic sumtypes (e.g. `ConsList[A]`, `Maybe[A]`, `Either[A, B]`), but I'm working on resolving this issue.
+
+Typechecking can be controlled with the `typecheck` argument: `class Thing(sumtype, typecheck='always'|'debug'|'never'):`.
+Fields with no annotations will not be typechecked, and it is possible to mix annotated an non-annotated fields in a definition.
 
 
 ### Equality and hashing
@@ -210,12 +215,8 @@ There's also tests in `sumtype.tests` to ensure that it all works correctly.
 And that's everything... for now!
 
 
-## Features coming in `1.0`
-- Default values
-*(easy, just haven't gotten around to it yet)*
-
-- Control over argument typechecking – always, in `__debug__` mode only, or never *(same as above)*
-
+## Features planned for in `1.0`
+- Defining generic sumtypes like `Maybe[A]`/`Either[A, B]` in a typesafe way
 
 ## Should I use it?
 Yeah! I didn't just build this library because I thought it'd be nice –
@@ -224,6 +225,7 @@ Saying that it's battle-tested is a bit much, but it's getting there.
 
 
 ## Possible future features
+- Default values
 
 - `mypy` support.
 Unfortunately, last time I checked, `mypy` didn't handle metaclass-created classes too well, but that might have changed.

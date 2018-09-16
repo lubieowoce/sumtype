@@ -21,7 +21,7 @@ def extract_doctest_snippets(lines):
 		# ^ python whitespace is safe,
 		# because in the repl indented blocks are prefixed with '...' 
 		if not in_block:
-			if line.startswith(r'```'):
+			if line.startswith(r'```python'):
 				# block start
 				in_block = True
 				block = []
@@ -58,7 +58,7 @@ src = '\n'.join(
 
 import doctest
 
-
+print('Testing {} blocks'.format(len(blocks)))
 doctest.run_docstring_examples(src, name='readme', globs={}, optionflags=doctest.ELLIPSIS)
 print('(no output means that the examples in the README are OK)')
 # import os

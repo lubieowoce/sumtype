@@ -33,12 +33,12 @@ def unwrap_constructor(ctr):
 		return ctr.__func__ # 0-argument constructors aren't wrapped with @typechecked
 
 
-def sumtype_strategy(Class):
+def strategy_from_sumtype(Class):
 	return one_of(builds(unwrap_constructor(ctr), _cls=just(Thing)) for ctr in Class._constructors)
 
 
 
-Thing_strategy = sumtype_strategy(Thing)
+Thing_strategy = strategy_from_sumtype(Thing)
 hypothesis.strategies.register_type_strategy(Thing, Thing_strategy)
 
 # for _ in range(40):
@@ -50,6 +50,30 @@ hypothesis.strategies.register_type_strategy(Thing, Thing_strategy)
 @given(x=infer)
 def test_as_tuple_from_tuple_identity(x: Thing):
 	assert x == x.__class__.from_tuple(x.as_tuple())
+
+# @composite - should be useful for generating particular variants / constructor+args pairs
+# https://hypothesis.readthedocs.io/en/latest/data.html#composite-strategies
+
+# Strategy.[map, filter, flatmap] might be useful too
+
+# To generate a class and run tests on it:
+
+# class TestSomeSumtype(RuleBasedStateMachine):
+# 	Class = bundle('Class')
+# 	Class_strategy = bundle('Class_strategy')
+
+# 	@initialize(targets=('Class', 'Class_strategy'), typename=typename_strategy, spec=spec_strategy)
+# 	def make_class(typename, spec):
+# 		# make a class strategy too?
+# 		Class = sumtype(typename, spec)
+# 		Class_strategy = strategy_from_sumtype(Class)
+# 		return (Class, Class_strategy)
+
+# 	@rule(x=Class_strategy)
+# 	def test_equality_reflexive(x):
+# 		assert x == x
+
+		
 
 
 if __name__ == '__main__':
