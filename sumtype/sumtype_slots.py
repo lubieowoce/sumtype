@@ -1068,7 +1068,7 @@ def sumtype(
 				  ])
 				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
 				],
-				default=['raise self.__class__._get_invalid_variant_error(variant_id)'],
+				default=['raise a.__class__._get_invalid_variant_error(a_variant_id)'],
 				allow_zero_cases=True
 			)
 		],
