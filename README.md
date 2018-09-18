@@ -17,15 +17,15 @@ Suggestions, feedback and contributions are very welcome!
 
 ## A quick tour
 ```python
-    >>> from sumtype import sumtype
-    >>> from typing import Tuple
-    >>>
-    >>> class Thing(sumtype):
-    ...     def Foo(x: int, y: int): ...
-    ...     def Bar(y: str, hmm: Tuple[str, str]): ...
-    ...     def Zap(): ...
-    ...
-    >>>
+>>> from sumtype import sumtype
+>>> from typing import Tuple
+>>>
+>>> class Thing(sumtype):
+...     def Foo(x: int, y: int): ...
+...     def Bar(y: str, hmm: Tuple[str, str]): ...
+...     def Zap(): ...
+...
+>>>
 ```
 This means that a `Thing` value can be one of three variants:
 - a `Foo` with two `int` fields, `x` and `y`
@@ -38,42 +38,42 @@ If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see
 
 #### Creating values and attribute access
 ```python
-    >>> foo = Thing.Foo(x=3, y=5)          # named arguments
-    >>> bar = Thing.Bar('hello', ('wo', 'rld'))  # positional arguments
-    >>> zap = Thing.Zap()
+>>> foo = Thing.Foo(x=3, y=5)  # named arguments
+>>> bar = Thing.Bar('hello', ('wo', 'rld'))  # positional arguments
+>>> zap = Thing.Zap()
 ```
 Note that they're still just different values of the same type, not subclasses:
 ```python
-    >>> type(foo) is Thing  and  type(bar) is Thing  and  type(zap) is Thing
-    True
+>>> type(foo) is Thing  and  type(bar) is Thing  and  type(zap) is Thing
+True
 ```
 
 Every specified field gets an accessor:
 ```python
-    >>> foo.x, foo.y;
-    (3, 5)
-    >>> bar.y,  bar.hmm
-    ('hello', ('wo', 'rld'))
+>>> foo.x, foo.y;
+(3, 5)
+>>> bar.y,  bar.hmm
+('hello', ('wo', 'rld'))
 ```
 ...with checks if the access is valid and descriptive error messages:
 ```python
-    >>> Thing.Zap().hmm  # only `Bar`s have a `hmm` field
-    Traceback (most recent call last):
-      ...
-    AttributeError: Incorrect 'Thing' variant: Field 'hmm' not declared in variant 'Zap'...
-    >>>
-    >>> Thing.Foo(x=1, y=2).blah_blah_blah  # no variant has a `blah_blah_blah` field 
-    Traceback (most recent call last):
-      ...
-    AttributeError: Unknown attribute: Field 'blah_blah_blah' not declared in any variant of 'Thing'...
+>>> Thing.Zap().hmm  # only `Bar`s have a `hmm` field
+Traceback (most recent call last):
+  ...
+AttributeError: Incorrect 'Thing' variant: Field 'hmm' not declared in variant 'Zap'...
+>>>
+>>> Thing.Foo(x=1, y=2).blah_blah_blah  # no variant has a `blah_blah_blah` field 
+Traceback (most recent call last):
+  ...
+AttributeError: Unknown attribute: Field 'blah_blah_blah' not declared in any variant of 'Thing'...
 ```
 
 The values also have a nice `__repr__()`:
 ```python
-    >>> foo; bar; zap
-    Thing.Foo(x=3, y=5)
-    Thing.Bar(y='hello', hmm=('wo', 'rld'))
-    Thing.Zap()
+>>> foo; bar; zap
+Thing.Foo(x=3, y=5)
+Thing.Bar(y='hello', hmm=('wo', 'rld'))
+Thing.Zap()
 ```
 
 The library is designed with efficiency in mind¹ – it uses `__slots__` for attribute storage
