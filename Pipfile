@@ -4,8 +4,8 @@ verify_ssl = true
 url = "https://pypi.org/simple"
 
 [dev-packages]
-hypothesis = "*"
 pytest = "*"
+hypothesis = "*"
 
 [requires]
 python_version = "3.5"

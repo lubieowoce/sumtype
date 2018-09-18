@@ -89,23 +89,23 @@ To see the generated code, do ` class Thing(sumtype, verbose=True):`.
 
 `sumtype` uses [`typeguard`](https://github.com/agronholm/typeguard) to typecheck the fields:
 ```python
-    >>> # Foo(x: int, y: int) -> Thing
-    >>> Thing.Foo(x=1, y=2)
-    Thing.Foo(x=1, y=2)
-    >>> Thing.Foo(x='should be an int', y=2)
-    Traceback (most recent call last):
-      ...
-    TypeError: type of argument "x" must be int; got str instead
+>>> # Foo(x: int, y: int) -> Thing
+>>> Thing.Foo(x=1, y=2)
+Thing.Foo(x=1, y=2)
+>>> Thing.Foo(x='should be an int', y=2)
+Traceback (most recent call last):
+  ...
+TypeError: type of argument "x" must be int; got str instead
 ```
 `typing` annotations are supported too:
 ```python
-    >>> # Bar(y: str, hmm: Tuple[str, str]) -> Thing
-    >>> Thing.Bar(y='a', hmm=('b', 'c'))
-    Thing.Bar(y='a', hmm=('b', 'c'))
-    >>> Thing.Bar(y='a', hmm=(1, 2))
-    Traceback (most recent call last):
-      ...
-    TypeError: type of argument "hmm"[0] must be str; got int instead
+>>> # Bar(y: str, hmm: Tuple[str, str]) -> Thing
+>>> Thing.Bar(y='a', hmm=('b', 'c'))
+Thing.Bar(y='a', hmm=('b', 'c'))
+>>> Thing.Bar(y='a', hmm=(1, 2))
+Traceback (most recent call last):
+  ...
+TypeError: type of argument "hmm"[0] must be str; got int instead
 ```
 [`typeguard`](https://github.com/agronholm/typeguard) supports all `typing` constructs (`Tuple`, `List`, `Dict`, `Union`, etc).
 (See their [README](https://github.com/agronholm/typeguard/blob/master/README.rst) for a full list)
@@ -120,12 +120,12 @@ Fields with no annotations will not be typechecked, and you can mix annotated an
 
 ### Equality and hashing
 ```python
-    >>> Thing.Foo(1,2) == Thing.Foo(1,2)
-    True
-    >>> Thing.Foo(1,2) == Thing.Bar('a', ('b', 'c'));
-    False
-    >>> {foo, foo, bar, zap} == {foo, bar, zap}
-    True
+>>> Thing.Foo(1,2) == Thing.Foo(1,2)
+True
+>>> Thing.Foo(1,2) == Thing.Bar('a', ('b', 'c'));
+False
+>>> {foo, foo, bar, zap} == {foo, bar, zap}
+True
 ```
 `__eq__` and `__hash__` pay attention to variant - even if we had a variant `Moo(x: int, y: int)`,
 `Foo(1,2) != Moo(1,2)` and `hash(Foo(1,2)) != hash(Moo(1,2))`.
@@ -136,13 +136,13 @@ so the values must all implement the relevant method for it to work.*
 
 ### Modifying values
 ```python
-    >>> foo;  foo.replace(x=99)
-    Thing.Foo(x=3, y=5)
-    Thing.Foo(x=99, y=5)
-    >>>
-    >>> bar;  bar.replace(y='abc', hmm=('d', 'e'))
-    Thing.Bar(y='hello', hmm=('wo', 'rld'))
-    Thing.Bar(y='abc', hmm=('d', 'e'))
+>>> foo;  foo.replace(x=99)
+Thing.Foo(x=3, y=5)
+Thing.Foo(x=99, y=5)
+>>>
+>>> bar;  bar.replace(y='abc', hmm=('d', 'e'))
+Thing.Bar(y='hello', hmm=('wo', 'rld'))
+Thing.Bar(y='abc', hmm=('d', 'e'))
 ```
 `foo.replace(x=99)` returns a new value, just like in `namedtuple`. 
 `.replace` behaves just like the constructors w.r.t. typechecking.
@@ -154,63 +154,63 @@ So even if you have a field called `replace`, you can still use `my_value._repla
 ### Pattern matching
 ##### Statement form:
 ```python
-    >>> def do_something(val: Thing):
-    ...     if val.is_Foo():
-    ...         print(val.x * val.y)
-    ...     elif val.is_Bar():
-    ...         print('The result is', val.y, ''.join(val.hmm))
-    ...     elif val.is_Zap():
-    ...         print('Whoosh!')
-    ...     else: val.impossible() # throws an error - nice if you like having all cases covered
-    ...
-    >>> for val in (foo, bar, zap):
-    ...     do_something(val)
-    ...
-    15
-    The result is hello world
-    Whoosh!
+>>> def do_something(val: Thing):
+...     if val.is_Foo():
+...         print(val.x * val.y)
+...     elif val.is_Bar():
+...         print('The result is', val.y, ''.join(val.hmm))
+...     elif val.is_Zap():
+...         print('Whoosh!')
+...     else: val.impossible() # throws an error - nice if you like having all cases covered
+...
+>>> for val in (foo, bar, zap):
+...     do_something(val)
+...
+15
+The result is hello world
+Whoosh!
 ```
 ##### Expression form:
 ```python
-    >>> [ val.match(
-    ...      Foo = lambda x, y: x*y, 
-    ...      Zap = lambda: 999,
-    ...      _   = lambda: -1 # default case
-    ...   )
-    ...  for val in (foo, bar, zap)]
-    [15, -1, 999]
+>>> [ val.match(
+...      Foo = lambda x, y: x*y, 
+...      Zap = lambda: 999,
+...      _   = lambda: -1 # default case
+...   )
+...  for val in (foo, bar, zap)]
+[15, -1, 999]
 ```
 
 
 ### Conversions between `sumtypes` and standard types
 To...
 ```python
-    >>> foo.values();  foo.values_dict();
-    (3, 5)
-    OrderedDict([('x', 3), ('y', 5)])
+>>> foo.values();  foo.values_dict();
+(3, 5)
+OrderedDict([('x', 3), ('y', 5)])
 ```
 ```python
-    >>> foo.as_tuple();  foo.as_dict()
-    ('Foo', 3, 5)
-    OrderedDict([('variant', 'Foo'), ('x', 3), ('y', 5)])
+>>> foo.as_tuple();  foo.as_dict()
+('Foo', 3, 5)
+OrderedDict([('variant', 'Foo'), ('x', 3), ('y', 5)])
 ```
 ...and from
 ```python
-    >>> Thing.from_tuple(('Foo', 10, 15));  Thing.from_dict({'variant':'Foo', 'x': 10, 'y': 15})
-    Thing.Foo(x=10, y=15)
-    Thing.Foo(x=10, y=15)
+>>> Thing.from_tuple(('Foo', 10, 15));  Thing.from_dict({'variant':'Foo', 'x': 10, 'y': 15})
+Thing.Foo(x=10, y=15)
+Thing.Foo(x=10, y=15)
 ```
 Also, `x == Thing.from_tuple(x.as_tuple())` and `x == Thing.from_dict(x.as_dict())`.
 
 
 ### Pickle support
 ```python
-    >>> import pickle
-    >>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', ('two', 'three')), Thing.Zap()]
-    >>> vals2 = pickle.loads(pickle.dumps(vals))
-    >>> vals;  vals == vals2
-    [Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm=('two', 'three')), Thing.Zap()]
-    True
+>>> import pickle
+>>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', ('two', 'three')), Thing.Zap()]
+>>> vals2 = pickle.loads(pickle.dumps(vals))
+>>> vals;  vals == vals2
+[Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm=('two', 'three')), Thing.Zap()]
+True
 ```
 
 There's also tests in `sumtype.tests` to ensure that it all works correctly.

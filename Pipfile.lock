@@ -58,12 +58,12 @@
         },
         "hypothesis": {
             "hashes": [
-                "sha256:0b6d0c348fa6ebc475626571dff0eb5cf118e098cb25a54c82d40c303ddae4cd",
-                "sha256:57329f7e361c1e2ddded5a759cc0347a245269cd47345322b818b16680f47bf0",
-                "sha256:7112e161bdc615fe8a9912887eded3a3c77708086082d8817a29a322a34fd3f1"
+                "sha256:08182e016e2c248b98579d7dbe4d10c7388cf6c5e57394177a2decafe137197d",
+                "sha256:14b43b6c75ec23e1ade58c8472a38f2bb4b4eb9d9e1a74f10752c494bb14a758",
+                "sha256:a2a5fb6d9d46653163f8d288c744e2a982d12b37758810e63caefac33a2ac902"
             ],
             "index": "pypi",
-            "version": "==3.71.3"
+            "version": "==3.71.10"
         },
         "more-itertools": {
             "hashes": [
