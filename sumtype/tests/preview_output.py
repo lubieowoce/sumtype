@@ -25,7 +25,7 @@ print('\n\n\n--------------')
 f = Thing.Foo(3, 5)
 b = Thing.Bar(['abc', 'def'])
 z = Thing.Zip((3.5, 6.7))
-d = Thing.Bop()
+d = Thing.Bop
 
 
 try: res = Thing.Foo('x', 'y')
@@ -55,3 +55,15 @@ try: res = f.replace(x='a')
 except TypeError as e: res = e
 print(repr(res))
 print()
+
+print('##################################')
+class Color(sumtype, verbose=True):
+	Red = ...
+	Green = ...
+	Blue = ...
+
+r = Color.Red
+g = Color.Green
+b = Color.Blue
+
+print(r, g, b, sep=', ')

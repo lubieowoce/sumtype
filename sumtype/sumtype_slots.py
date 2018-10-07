@@ -35,6 +35,12 @@ __all__ = [
 	'untyped_sumtype',
 ]
 
+
+# TODO:
+# Handle no-arg variants better in values, __getstate__ and __eq__
+# (As good as __setstate__ and replace)
+
+
 def is_typelike(t)    -> bool: return is_simple_type(t) or is_typing_type(t)
 def is_simple_type(t) -> bool: return type(t) is type
 def is_typing_type(t) -> bool: return type(t).__module__ == 'typing'
@@ -263,7 +269,11 @@ def sumtype(
 		def _from_tuple(cls, tup: tuple) -> typename:
 			variant, values = tup[0], tup[1:]
 			constructor = getattr(cls, variant)
-			return constructor(*values)
+			return (
+				constructor(*values)
+				if cls._variant_fields[variant]
+				else constructor
+			)
 			
 		from_tuple = _from_tuple
 
@@ -273,7 +283,11 @@ def sumtype(
 			dct_ = dct.copy()
 			variant = dct_.pop('variant')
 			constructor = getattr(cls, variant)
-			return constructor(**dct_)
+			return (
+				constructor(**dct_)
+				if cls._variant_fields[variant]
+				else constructor
+			)
 			
 		from_dict = _from_dict
 
@@ -397,14 +411,17 @@ def sumtype(
 		@classmethod
 		def _variant_reprs(cls) -> Iterator[str]:
 			return (
-				"{var}({fields})".format(
-					var=variant,
-					fields=str.join(
-						', ',
-						(field+': '+type_literal(type_)
-						 for (field, type_) in cls._variant_specs[variant])
+				"{var}" + 
+				(
+					"({fields})".format(
+						var=variant,
+						fields=str.join(
+							', ',
+							(field+': '+type_literal(type_)
+							 for (field, type_) in cls._variant_specs[variant])
+						)
 					)
-				)
+				) if cls._variant_specs[variant] else ""
 				for variant in cls._variants
 			)
 
@@ -849,7 +866,9 @@ def sumtype(
 	Class._match = _match
 	Class.match  = _match 
 
+
 	# constructors
+
 	def mk_def_constructor(typename, id_, variant, fields, types):
 		# field_args_decl = [
 		# 	(field+': '+type_literal(type_)) if type_ not in (Any, object) else field
@@ -888,41 +907,52 @@ def sumtype(
 	# Class.__set_1 = Class._1.__set__
 
 	constructors = []
+	values = []
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
 		fields = Class._variant_id_fields[id_]
-		types = variant_attr_types[id_]
-		fields_and_types = variant_attr_specs[id_]
-		_def_constructor = \
-			flatten_tree(
-				mk_def_constructor(
-					typename=typename,
-					id_=id_,
-					variant=variant,
-					fields=fields,
-					types=types,
+		if not fields:
+			# no-arg variants don't get a constructor function, only a single value 
+			val = Class.__new__(Class)
+			# the `val._unsafe_set_variant_id` shortcut hasn't been defined yet, so use this
+			Class._variant_id.__set__(val, id_)
+
+			constructors.append(val)
+			setattr(Class, variant, val)
+		else:
+			# create a constructor function
+			types = variant_attr_types[id_]
+			fields_and_types = variant_attr_specs[id_]
+			_def_constructor = \
+				flatten_tree(
+					mk_def_constructor(
+						typename=typename,
+						id_=id_,
+						variant=variant,
+						fields=fields,
+						types=types,
+					)
 				)
-			)
 
-		if verbose:
-			print(_def_constructor, end='\n\n')
+			if verbose:
+				print(_def_constructor, end='\n\n')
 
-		assert not hasattr(Class, variant), \
-			"'{}' already defined. Class dir:\n{}".format(variant, dir(Class))
-		constructor = eval_def(_def_constructor)
+			assert not hasattr(Class, variant), \
+				"'{}' already defined. Class dir:\n{}".format(variant, dir(Class))
+			constructor = eval_def(_def_constructor)
 
-		constructor.__qualname__ = '{}.{}'.format(typename, constructor.__name__)
-		constructor.__annotations__ = {
-			field: type_
-			for (field, type_) in fields_and_types
-			if (type_ is not Any) and (type_ is not object)
-		}
-		constructor.__annotations__['return'] = Class
-		if fields:
-			constructor = maybe_typechecked(constructor)
-		constructor = classmethod(constructor)
-		# constructor = functools.wraps(constructor)(typechecked(constructor))
-		setattr(Class, variant, constructor)
-		constructors.append(getattr(Class, variant)) # get the bound classmethod
+			constructor.__qualname__ = '{}.{}'.format(typename, constructor.__name__)
+			constructor.__annotations__ = {
+				field: type_
+				for (field, type_) in fields_and_types
+				if (type_ is not Any) and (type_ is not object)
+			}
+			constructor.__annotations__['return'] = Class
+			if fields:
+				constructor = maybe_typechecked(constructor)
+			constructor = classmethod(constructor)
+			# constructor = functools.wraps(constructor)(typechecked(constructor))
+			setattr(Class, variant, constructor)
+			constructors.append(getattr(Class, variant)) # get the bound classmethod
 
 	Class._constructors = tuple(constructors)
 
@@ -1027,16 +1057,19 @@ def sumtype(
 				[ when('variant_id == '+lit(id_), [
 						# reuse `apply` to build something like 'return "Foo(x={self.x})".format(self=self)'
 						# because it's good for `foo(a=x, b=y)` syntax
-						('return "' +
-							apply(
-								typename+'.'+variant,
-								kwargs=[(field, '{self._'+variant+'_'+field+'!r}') for field in variant_id_fields[id_]]
-							) +
-							'".format(self=self)'
+						'return ' + (
+							(	'"'+ 
+								apply(
+									typename+'.'+variant,
+									kwargs=[(field, '{self._'+variant+'_'+field+'!r}') for field in fields]
+								) +
+								'".format(self=self)'
+							) if fields else (
+							'"'+typename+'.'+variant+'"'
+							)
 						)
-						# + apply(variant, [(field, '{self._'+variant+'_'+field+'}') for field in fields]) \
 				  ])
-				  for (id_, variant) in zip(variant_ids, variants)
+				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
 				],
 				default=['raise self.__class__._get_invalid_variant_error(variant_id)'],
 				allow_zero_cases=True,
@@ -1316,7 +1349,7 @@ def main():
 	foo = Thing.Foo(3, 5)
 	bar = Thing.Bar("nice")
 	zip = Thing.Zip(15.234)
-	hop = Thing.Hop()
+	hop = Thing.Hop
 
 
 	print("Attribute access:")

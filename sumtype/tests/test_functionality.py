@@ -8,11 +8,11 @@ if __name__ == '__main__':
 	print('Adding', str(parent_package_location), 'to sys.path to enable import\n')
 	sys.path.append(str(parent_package_location))
 
-# # test if asserts work
-# if __name__ == '__main__':
-# 	try: assert False; asserts_disabled = True
-# 	except AssertionError: asserts_disabled = False
-# 	if asserts_disabled: raise RuntimeError("Asserts are disabled, tests won't work")
+# test if asserts work
+if __name__ == '__main__':
+	try: assert False; asserts_disabled = True
+	except AssertionError: asserts_disabled = False
+	if asserts_disabled: raise RuntimeError("Asserts are disabled, tests won't work")
 
 
 
@@ -89,7 +89,7 @@ def test_thing(Thing):
 	foo = Thing.Foo(3, 5)
 	bar = Thing.Bar("nice")
 	zip = Thing.Zip(15.234)
-	hop = Thing.Hop()
+	hop = Thing.Hop
 
 	# print("Attribute access:")
 	all_variant_fields = uniq( sum((Thing._variant_fields[variant] for variant in Thing._variants), ()) )
@@ -158,14 +158,15 @@ def test_thing(Thing):
 
 	expr = "C(*args1) == C(*args1)"
 	for (C, args1) in b.zip(Thing._constructors, args1):
-		res  = eval(expr)
-		assert res, '{!r} failed for {!r}'.format(expr, (C, args1))
-
-
-	expr = "C(*args1) != C(*args1)"
-	for (C, args1, args2) in b.zip(Thing._constructors, args1, args2):
-		res  = eval(expr)
 		if len(args1) >= 1:
+			res  = eval(expr)
+			assert res, '{!r} failed for {!r}'.format(expr, (C, args1))
+
+
+	expr = "C(*args1) != C(*args2) if "
+	for (C, args1, args2) in b.zip(Thing._constructors, args1, args2):
+		if len(args1) >= 1:
+			res  = eval(expr)
 			assert res, '{!r} failed for {!r}'.format(expr, (C, args1, args2))
 
 	# doesn't work if the variants have different type specs
@@ -196,10 +197,11 @@ def test_thing(Thing):
 	left_  = eval('lambda x, kwargs: '+left)
 	right_ = eval('lambda x, kwargs: '+right) 
 	for (x_, kwargs_) in b.zip(values, kwargs2):
-		vleft  = left_ (x_, kwargs_)
-		vright = right_(x_, kwargs_)
-		res = vleft == vright
-		assert res, '\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'.format(left, vleft, right, vright, (x_, kwargs_),)
+		if kwargs_:
+			vleft  = left_ (x_, kwargs_)
+			vright = right_(x_, kwargs_)
+			res = vleft == vright
+			assert res, '\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'.format(left, vleft, right, vright, (x_, kwargs_),)
 
 	bar2 = bar.replace(y="better")
 	assert bar2.y == "better", repr(bar2)
