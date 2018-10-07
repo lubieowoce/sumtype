@@ -20,7 +20,7 @@ import typeguard
 Fun = Callable
 A = TypeVar('A')
 
-import functools
+# import functools
 from functools import partial
 
 from collections import OrderedDict
@@ -96,11 +96,9 @@ def untyped_sumtype(
 		typename: str,
 		variant_specs: List[ Tuple[str, List[str]] ],
 		*,
-		immutable=True,
 		verbose=False,
 		allow_zero_constructors=False,
-		_module_name=None,
-		_set_members_with_assignment=False
+		_module_name=None
 	) -> type:
 
 	
@@ -132,11 +130,9 @@ def untyped_sumtype(
 			variant_specs,
 			typecheck='never',
 			# pass the rest through unchanged
-			immutable=immutable,
 			verbose=verbose,
 			allow_zero_constructors=allow_zero_constructors,
 			_module_name=_module_name,
-			_set_members_with_assignment=_set_members_with_assignment
 		) 
 
 
@@ -147,18 +143,13 @@ def sumtype(
 		variant_specs: List[  Tuple[str, List[Tuple[str, type]] ]  ],
 		*,
 		typecheck='always',
-		immutable=True,
 		verbose=False,
 		allow_zero_constructors=False,
-		_module_name=None,
-		_set_members_with_assignment=False
+		_module_name=None
 	) -> type:
 	"""
 	`typecheck` must be one of ('always', 'debug', 'never')
 	"""
-
-	if not immutable:
-		raise NotImplementedError('Mutability is not supported yet')
 
 	if not allow_zero_constructors and not variant_specs:
 		raise ValueError(
@@ -166,9 +157,6 @@ def sumtype(
 			+'Pass `allow_zero_constructors=False` to allow this.'
 		)
 		
-	if (_set_members_with_assignment and immutable):
-		raise ValueError('Cannot use assignment to set members if the class is immutable')
-
 	errors = typed_spec_errors(typename, variant_specs)
 	if errors:
 		raise ValueError('\n'.join(errors))
@@ -376,21 +364,20 @@ def sumtype(
 
 
 
-		if immutable:
-			def _raise_setattr_forbidden(self, attr: str, val) -> NoReturn:
-				"""
-				A fake __setattr__ implemented only to give better error messages
-				for attribute modification attempts.
-				"""
-				raise TypeError(
-					"Cannot modify '{type}' values. "+
-					"Use `myval2 = myval.replace(attr=x)` instead. "+
-					"(Tried to set {self}.{field} = {val!r})"\
-						.format(
-							type=self.__class__.__qualname__, self=self, field=attr, val=val,
-						)
-				)
-			__setattr__ = _raise_setattr_forbidden
+		def _raise_setattr_forbidden(self, attr: str, val) -> NoReturn:
+			"""
+			A fake __setattr__ implemented only to give better error messages
+			for attribute modification attempts.
+			"""
+			raise TypeError(
+				"Cannot modify '{type}' values. "+
+				"Use `myval2 = myval.replace(attr=x)` instead. "+
+				"(Tried to set {self}.{field} = {val!r})"\
+					.format(
+						type=self.__class__.__qualname__, self=self, field=attr, val=val,
+					)
+			)
+		__setattr__ = _raise_setattr_forbidden
 
 
 
@@ -531,11 +518,7 @@ def sumtype(
 	# A compiler could skip creating that tuple because it
 	# immediately gets deconstructed or inline the code, but Python is interpreted.
 
-	if not _set_members_with_assignment:
-		_set_attr = 'cls._unsafe_set_{attr}({obj}, {val})'
-	else:
-		_set_attr = '{obj}._{attr} = {val}'
-
+	_set_attr = 'cls._unsafe_set_{attr}({obj}, {val})'
 
 	# template function for multiple functions that just pack the fields into a structure and return it
 
@@ -677,7 +660,7 @@ def sumtype(
 	Class.__getstate__ = __getstate__
 
 
-	def mk_def_replace(typename, immutable, typecheck, variant_ids, variants, variant_id_fields, variant_id_types, _set_attr):
+	def mk_def_replace(typename, typecheck, variant_ids, variants, variant_id_fields, variant_id_types, _set_attr):
 		with_fields    = [
 			(id_, variant, fields, types)
 			for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
@@ -783,7 +766,6 @@ def sumtype(
 			mk_def_replace(
 				typename=typename,
 				typecheck=typecheck,
-				immutable=immutable,
 				variant_ids=Class._variant_ids,
 				variants=Class._variants,
 				variant_id_fields=Class._variant_id_fields,
@@ -868,36 +850,20 @@ def sumtype(
 	Class.match  = _match 
 
 	# constructors
-	if not _set_members_with_assignment:
-		def mk_def_constructor(typename, id_, variant, fields, types):
-			# field_args_decl = [
-			# 	(field+': '+type_literal(type_)) if type_ not in (Any, object) else field
-			# 	for (field, type_) in zip(fields, types)
-			# ]
-			return [
-				def_(variant, ['_cls', *fields]), [
-					'_val = _cls.__new__(_cls)',
-					# _set_attr.format(obj='_val', attr='variant_id', _val=lit(id_)),
-					'_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
-					*(
-					# _set_attr.format(obj='_val', attr=variant+'_'+field, _val=field)
-					"_cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
-					for field in fields
-					),
-					'return _val',
-				],
-			]
-	else:
-
-		mk_def_constructor = lambda typename, id_, variant, fields, types: [
+	def mk_def_constructor(typename, id_, variant, fields, types):
+		# field_args_decl = [
+		# 	(field+': '+type_literal(type_)) if type_ not in (Any, object) else field
+		# 	for (field, type_) in zip(fields, types)
+		# ]
+		return [
 			def_(variant, ['_cls', *fields]), [
 				'_val = _cls.__new__(_cls)',
 				# _set_attr.format(obj='_val', attr='variant_id', _val=lit(id_)),
-				# '_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
-				(
-				tuple_(['_val._variant_id']+['_val._{}'.format(variant+'_'+field) for field in fields], parens=False)+\
-				' = '+\
-				tuple_((lit(id_),)+fields, parens=False)
+				'_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
+				*(
+				# _set_attr.format(obj='_val', attr=variant+'_'+field, _val=field)
+				"_cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
+				for field in fields
 				),
 				'return _val',
 			],
@@ -1330,8 +1296,6 @@ def main():
 		('Hop', []         ),
 	],
 	 verbose=True,
-	 # immutable=False,
-	 # _set_members_with_assignment=True,
 	)
 
 	print('__name__     : ', Thing.__name__)
