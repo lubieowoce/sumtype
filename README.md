@@ -40,7 +40,7 @@ If you prefer `namedtuple`-style definitions, `sumtype` supports those too - see
 ```python
 >>> foo = Thing.Foo(x=3, y=5)  # named arguments
 >>> bar = Thing.Bar('hello', ('wo', 'rld'))  # positional arguments
->>> zap = Thing.Zap()
+>>> zap = Thing.Zap
 ```
 Note that they're still just different values of the same type, not subclasses:
 ```python
@@ -57,7 +57,7 @@ Every specified field gets an accessor:
 ```
 ...with checks if the access is valid and descriptive error messages:
 ```python
->>> Thing.Zap().hmm  # only `Bar`s have a `hmm` field
+>>> Thing.Zap.hmm  # only `Bar`s have a `hmm` field
 Traceback (most recent call last):
   ...
 AttributeError: Incorrect 'Thing' variant: Field 'hmm' not declared in variant 'Zap'...
@@ -73,7 +73,7 @@ The values also have a nice `__repr__()`:
 >>> foo; bar; zap
 Thing.Foo(x=3, y=5)
 Thing.Bar(y='hello', hmm=('wo', 'rld'))
-Thing.Zap()
+Thing.Zap
 ```
 
 The library is designed with efficiency in mind¹ – it uses `__slots__` for attribute storage
@@ -206,10 +206,10 @@ Also, `x == Thing.from_tuple(x.as_tuple())` and `x == Thing.from_dict(x.as_dict(
 ### Pickle support
 ```python
 >>> import pickle
->>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', ('two', 'three')), Thing.Zap()]
+>>> vals  = [Thing.Foo(1, 2), Thing.Bar('one', ('two', 'three')), Thing.Zap]
 >>> vals2 = pickle.loads(pickle.dumps(vals))
 >>> vals;  vals == vals2
-[Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm=('two', 'three')), Thing.Zap()]
+[Thing.Foo(x=1, y=2), Thing.Bar(y='one', hmm=('two', 'three')), Thing.Zap]
 True
 ```
 
