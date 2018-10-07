@@ -53,7 +53,9 @@ class sumtype_meta(type):
 		else:
 			variants_and_constructor_stubs = [
 				(name, val) for (name, val) in dct.items()
-				if is_variant_name(name) and inspect.isroutine(val)
+				if is_variant_name(name) and (
+					val is ... or inspect.isroutine(val)
+				)
 			]
 
 		# remove the constructor stubs from the namespace
@@ -62,12 +64,16 @@ class sumtype_meta(type):
 
 		variant_specs = []
 		for (variant, constructor_stub) in variants_and_constructor_stubs:
-			hints = typing.get_type_hints(constructor_stub)
-			spec = []
-			for (field, _param_descr) in inspect.signature(constructor_stub).parameters.items():
-				field_type = hints.get(field, typing.Any)
-				spec.append((field, field_type))
-			variant_specs.append((variant, spec))
+			if inspect.isroutine(constructor_stub):
+				field_spec = []
+				hints = typing.get_type_hints(constructor_stub)
+				for (field, _param_descr) in inspect.signature(constructor_stub).parameters.items():
+					field_type = hints.get(field, typing.Any)
+					field_spec.append((field, field_type))
+				spec = (variant, field_spec)
+			else:
+				spec = (variant, []) # no arg constructor defined with `Variant = ...`
+			variant_specs.append(spec)
 
 		module_name = dct['__module__']
 
