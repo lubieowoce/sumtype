@@ -102,6 +102,7 @@ def untyped_sumtype(
 		typename: str,
 		variant_specs: List[ Tuple[str, List[str]] ],
 		*,
+		constants=False,
 		verbose=False,
 		allow_zero_constructors=False,
 		_module_name=None
@@ -135,6 +136,7 @@ def untyped_sumtype(
 			typename,
 			variant_specs,
 			typecheck='never',
+			constants=constants,
 			# pass the rest through unchanged
 			verbose=verbose,
 			allow_zero_constructors=allow_zero_constructors,
@@ -149,6 +151,7 @@ def sumtype(
 		variant_specs: List[  Tuple[str, List[Tuple[str, type]] ]  ],
 		*,
 		typecheck='always',
+		constants=False,
 		verbose=False,
 		allow_zero_constructors=False,
 		_module_name=None
@@ -251,11 +254,17 @@ def sumtype(
 		variant = _variant
 
 
-		@property
 		def _constructor(self):
-			"The constructor used to build self"
+			"The constructor used to create self"
 			cls = self.__class__
 			return getattr(cls, self._variant)
+
+		_constructor.__annotations__['return'] = (
+			Union[typename, Callable[..., typename]]
+			if constants else
+			Callable[..., typename]
+		)
+		_constructor = property(_constructor)
 		
 
 		def _values_dict(self) -> OrderedDict:
@@ -265,33 +274,47 @@ def sumtype(
 
 		values_dict = _values_dict
 
+		if constants:
+			@classmethod
+			def _from_tuple(cls, tup: tuple) -> typename:
+				variant = tup[0]
+				constructor = getattr(cls, variant)
+				return (
+					constructor(*tup[1:])
+					if cls._variant_fields[variant]
+					else constructor
+				)
+				
 
-		@classmethod
-		def _from_tuple(cls, tup: tuple) -> typename:
-			variant, values = tup[0], tup[1:]
-			constructor = getattr(cls, variant)
-			return (
-				constructor(*values)
-				if cls._variant_fields[variant]
-				else constructor
-			)
-			
+			@classmethod
+			def _from_dict(cls, dct: dict) -> typename:
+				dct_ = dct.copy()
+				variant = dct_.pop('variant')
+				constructor = getattr(cls, variant)
+				return (
+					constructor(**dct_)
+					if cls._variant_fields[variant]
+					else constructor
+				)
+				
+		else:
+			@classmethod
+			def _from_tuple(cls, tup: tuple) -> typename:
+				variant, values = tup[0], tup[1:]
+				constructor = getattr(cls, variant)
+				return constructor(*values)
+				
+
+			@classmethod
+			def _from_dict(cls, dct: dict) -> typename:
+				dct_ = dct.copy()
+				variant = dct_.pop('variant')
+				constructor = getattr(cls, variant)
+				return constructor(**dct_)
+				
 		from_tuple = _from_tuple
-
-
-		@classmethod
-		def _from_dict(cls, dct: dict) -> typename:
-			dct_ = dct.copy()
-			variant = dct_.pop('variant')
-			constructor = getattr(cls, variant)
-			return (
-				constructor(**dct_)
-				if cls._variant_fields[variant]
-				else constructor
-			)
-			
 		from_dict = _from_dict
-
+		
 
 		def __hash__(self):
 			return hash(self._as_tuple())
@@ -409,13 +432,12 @@ def sumtype(
 			)
 		__delattr__ = _raise_delattr_forbidden
 
-		
 		@classmethod
 		def _variant_reprs(cls) -> Iterator[str]:
 			for variant in cls._variants:
 				res = variant
 				variant_spec = cls._variant_specs[variant]
-				if variant_spec:
+				if variant_spec or (not constants and not variant_spec):
 					res += "({fields})".format(
 						fields=str.join(
 							', ',
@@ -907,12 +929,11 @@ def sumtype(
 	# Class.__set_0 = Class._0.__set__
 	# Class.__set_1 = Class._1.__set__
 
-	constructors = []
-	values = []
+	constructors = [] # pseudotype: List[ Union[Class, Callable[..., Class]] if constants else Callable[..., Class]]]
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
 		fields = Class._variant_id_fields[id_]
-		if not fields:
-			# no-arg variants don't get a constructor function, only a single value 
+		if constants and not fields:
+			# no-arg variants don't get a constructor function, only a single constant 
 			val = Class.__new__(Class)
 			# the `val._unsafe_set_variant_id` shortcut hasn't been defined yet, so use this
 			Class._variant_id.__set__(val, id_)
@@ -999,14 +1020,14 @@ def sumtype(
 
 	for field in all_variant_fields:
 		valid_variant_ids = variant_ids_that_have_attr[field]
-		assert len(valid_variant_ids) >= 1, \
-			"Internal error creating {name}:\n" + \
-			"field {field} is present in `all_variant_fields` even though no variants seem have it.\n" + \
-			"Debug:\n"+\
-			"variant_specs = {variant_specs}\n" + \
-			"all_variant_fields = {all_variant_fields}\n" + \
-			"variant_ids_that_have_attr={variant_ids_that_have_attr}\n" \
-				.format(**locals())
+		assert len(valid_variant_ids) >= 1, (
+			"Internal error creating {name}:\n" + 
+			"field {field} is present in `all_variant_fields` even though no variants seem have it.\n" + 
+			"Debug:\n" +
+			"variant_specs = {variant_specs}\n" + 
+			"all_variant_fields = {all_variant_fields}\n" + 
+			"variant_ids_that_have_attr={variant_ids_that_have_attr}\n"
+		) .format(**locals())
 
 		_def_getter = \
 			flatten_tree(

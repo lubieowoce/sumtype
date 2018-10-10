@@ -22,11 +22,27 @@ import sumtype
 
 uniq = sumtype.slots.uniq
 
+def options_repr(options: dict) -> str:
+	if not options:
+		return ''
+	return (
+		'(' +
+		', '.join('{k}={v!r}'.format(k=k, v=v) for (k, v) in options.items()) +
+		')'
+	)
+
 def test_make_from_bad_spec():
-	try: res = sumtype.sumtype.untyped('_Underscore Space Name', [('V', ['_a', 'as', 'b c']), ('V', ['x', 'x'])])
+	try: 
+		res = sumtype.sumtype.untyped(
+			'_Underscore Space Name', [
+				('Repeated', ['_a', 'as', 'b c']),
+				('Repeated', ['x', 'x'])
+			]
+		)
 	except Exception as e: res = e
 	assert isinstance(res, ValueError), repr(res)
 	print('Bad type spec handled OK')
+
 
 def make_void_classdef():
 	class Void(sumtype.sumtype, allow_zero_constructors=True):
@@ -51,35 +67,45 @@ def test_void(Void):
 	assert Void.__module__   == __name__,      Void.__module__
 
 	assert Void._constructors == ()
-	print('All "Void" tests OK')
+	print('All <Void> tests OK')
 
 
-def make_thing_classdef() -> type:
-	class Thing(sumtype.sumtype):
+
+def make_thing_classdef(options=None) -> type:
+	if options is None: options = {}
+
+	class Thing(sumtype.sumtype, **options):
 		def Foo(x: int, y: int): ...
 		def Bar(y: str): ...
 		def Zip(hey: float): ...
 		Hop = ...
 		
-	print("Thing classdef OK")
+	print('<Thing{}> classdef OK'.format(options_repr(options)))
 	return Thing
 
 
-def make_thing_call() -> type:
+
+def make_thing_call(options=None) -> type:
+	if options is None: options = {}
+
 	Thing = sumtype.sumtype(
-	'Thing', [
-		('Foo', [('x', int), ('y', int)]),
-		('Bar', [('y', str)]),
-		('Zip', [('hey', float)]),
-		('Hop', []),
-	])
+		'Thing', [
+			('Foo', [('x', int), ('y', int)]),
+			('Bar', [('y', str)]),
+			('Zip', [('hey', float)]),
+			('Hop', []),
+		],
+		**options
+	)
 
-	print("Thing call OK")
+	print('<Thing{}> call OK'.format(options_repr(options)))
 	return Thing
 
 
 
-def test_thing(Thing):
+def test_thing(Thing, options=None):
+	if options is None: options = {}
+
 	import builtins as b
 
 	assert Thing.__name__     == 'Thing',         Thing.__name__
@@ -89,13 +115,13 @@ def test_thing(Thing):
 	foo = Thing.Foo(3, 5)
 	bar = Thing.Bar("nice")
 	zip = Thing.Zip(15.234)
-	hop = Thing.Hop
+	hop = Thing.Hop if options.get('constants') else Thing.Hop()
 
 	# print("Attribute access:")
 	all_variant_fields = uniq( sum((Thing._variant_fields[variant] for variant in Thing._variants), ()) )
 
 	err_msg = lambda expr, should_work, did_work, res: (
-		"'{expr}' {should_str} work, but it {did_str}, giving '{res}'"\
+		"'{expr}' {should_str} work, but it {did_str}, giving '{res}'" \
 			.format(
 				should_str={True: "should", False: "shouldn't"}[should_work],
 				did_str   ={True: "did", False: "didn't"}[did_work],
@@ -132,7 +158,8 @@ def test_thing(Thing):
 		expr = '{val}.{bad}'.format(val=val, bad=str.join('', all_variant_fields))
 		try: res = eval(expr)
 		except AttributeError as e: res = e
-		assert isinstance(res, AttributeError), err_msg(expr, should_work=False, did_work=isinstance(res, AttributeError), res=res)
+		assert isinstance(res, AttributeError), \
+			err_msg(expr, should_work=False, did_work=isinstance(res, AttributeError), res=res)
 		# print(
 		# 	"\t{expr:<10}: {res!r}".format(
 		# 		expr=expr, res=res,
@@ -153,19 +180,19 @@ def test_thing(Thing):
 		assert expr, '{!r} failed for {!r}'.format(expr, x)
 
 
-	args1 = ((3, 5,),  ("nice",), (15.234,), ())
-	args2 = ((0, 10,), ("bad",),  (3.1415,), ())
+	variant_args1 = ((3, 5,),  ("nice",), (15.234,), None if options.get('constants') else ())
+	variant_args2 = ((0, 10,), ("bad",),  (3.1415,), None if options.get('constants') else ())
 
 	expr = "C(*args1) == C(*args1)"
-	for (C, args1) in b.zip(Thing._constructors, args1):
-		if len(args1) >= 1:
+	for (C, args1) in b.zip(Thing._constructors, variant_args1):
+		if args1 is not None:
 			res  = eval(expr)
 			assert res, '{!r} failed for {!r}'.format(expr, (C, args1))
 
 
-	expr = "C(*args1) != C(*args2) if "
-	for (C, args1, args2) in b.zip(Thing._constructors, args1, args2):
-		if len(args1) >= 1:
+	expr = "C(*args1) != C(*args2)"
+	for (C, args1, args2) in b.zip(Thing._constructors, variant_args1, variant_args2):
+		if args1 is not None and len(args1) >= 1:
 			res  = eval(expr)
 			assert res, '{!r} failed for {!r}'.format(expr, (C, args1, args2))
 
@@ -189,19 +216,25 @@ def test_thing(Thing):
 	# kwargs1 = ((3, 5,),  ("nice",), (15.234,), ())
 	# kwargs2 = ((0, 10,), ("bad",),  (3.1415,), ())
 	from collections import OrderedDict
-	assert len(Thing._variant_id_fields) == len(args2), '{} !~= {}'.format(Thing._variant_id_fields, args2)
-	kwargs2 = [OrderedDict(b.zip(fields, args)) for (fields, args) in b.zip(Thing._variant_id_fields, args2)]
+	assert len(Thing._variant_id_fields) == len(variant_args2), \
+		'{} !~= {}'.format(Thing._variant_id_fields, variant_args2)
+	variant_kwargs2 = [
+		OrderedDict(b.zip(fields, args2)) if args2 is not None else None
+		for (fields, args2) in b.zip(Thing._variant_id_fields, variant_args2)
+	]
 	
 	left  = 'x._constructor(**kwargs)'
 	right = 'x._replace(**kwargs)'
 	left_  = eval('lambda x, kwargs: '+left)
 	right_ = eval('lambda x, kwargs: '+right) 
-	for (x_, kwargs_) in b.zip(values, kwargs2):
-		if kwargs_:
+	for (x_, kwargs_) in b.zip(values, variant_kwargs2):
+		if kwargs_ is not None:
 			vleft  = left_ (x_, kwargs_)
 			vright = right_(x_, kwargs_)
 			res = vleft == vright
-			assert res, '\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'.format(left, vleft, right, vright, (x_, kwargs_),)
+			assert res, \
+				'\n{!r}\n  -> {!r}\n and \n{!r}\n  -> {!r}\n failed equality test on {!r}'\
+					.format(left, vleft, right, vright, (x_, kwargs_),)
 
 	bar2 = bar.replace(y="better")
 	assert bar2.y == "better", repr(bar2)
@@ -303,8 +336,8 @@ def test_thing(Thing):
 	assert isinstance(res, Exception), repr(res)
 
 	foo_ = Thing.Foo(3, 5)
+	Thing._variant_id.__set__(foo_, 15)
 	try:
-		Thing._variant_id.__set__(foo_, 15)
 		res = repr(foo_)
 	except Exception as e:
 		res = e
@@ -322,21 +355,23 @@ def test_thing(Thing):
 
 	# foo._Foo_y = 10
 	# print(foo)
-	print('All "Thing" tests OK')
+	print('All <Thing{}> tests OK'.format(options_repr(options)))
 
 
 if __name__ == '__main__':
 	print('Running tests')
 	print()
-	for Thing in (make_thing_classdef(), make_thing_call()):
-		test_thing(Thing)
+	for options in (dict(), dict(constants=True)):
+		for Thing in (make_thing_classdef(options), make_thing_call(options)):
+			try:
+				test_thing(Thing, options)
+			except AssertionError as e:
+				e2 = AssertionError('<Thing{}>'.format(options_repr(options)))
+				raise e2 from e
 	print()
 	for Void in (make_void_classdef(), make_void_call()):
 		test_void(Void)
 	print()
 
 	test_make_from_bad_spec()
-
-
-
 
