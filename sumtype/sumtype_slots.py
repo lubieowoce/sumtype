@@ -223,6 +223,13 @@ def sumtype(
 		_variant_id_fields = tuple(tuple(field_names) for field_names in variant_attr_names)
 		_variant_id_types  = tuple(tuple(field_types) for field_types in variant_attr_types)
 
+		_options = {
+			'typecheck':               typecheck,
+			'constants':               constants,
+			'verbose':                 verbose,
+			'allow_zero_constructors': allow_zero_constructors,
+		}
+
 		ARGUMENT_UNUSED = object() # used to test if a keyword argument was passed or not
 		# _variants            = _variants   
 		# _variant_ids         = _variant_ids

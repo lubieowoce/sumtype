@@ -15,6 +15,14 @@ __all__ = [
 
 is_variant_name = lambda name: name and name.isidentifier() and name[0].isupper()
 
+def _resolve_default_options(bases: 'typing.Tuple[type, ...]') -> 'dict':
+	collected_options = {}
+	for base in reversed(bases): # newer options override old ones
+		options = getattr(base, '_default_options_for_generated_classes', {})
+		collected_options.update(options)
+	return collected_options
+
+
 class sumtype_meta(type):
 	"""
 	A metaclass wrapper for `sumtype.[untyped_]sumtype()`
@@ -22,28 +30,47 @@ class sumtype_meta(type):
 	See `sumtype.sumtype` for more.
 	"""
 	# creates something to hold the class namespace
-	def __prepare__(typename, bases, process_class=True, **_):
-		if process_class:
+	def __prepare__(typename, bases, _process_class=True, **_):
+		if _process_class:
 			# preserve variant definition order
 			return OrderedDict()
 		else:
 			return {}
 
 	# processes the class definition 
-	def __new__(metacls, typename, bases, dct, *, process_class=True, **kwargs) -> 'Union[sumtype_meta, type]':
+	def __new__(
+			metacls, 
+			typename: 'str', 
+			bases: 'typing.Tuple[type, ...]', 
+			dct: 'dict', 
+			*, 
+			_process_class: 'bool' = True, 
+			 **options
+		 ) -> 'typing.Union[sumtype_meta, type]':
 		"""
 		Note:
-			Unless it's passed `process_class=False`,
+			Unless it's passed `_process_class=False`,
 			this metaclass returns an instance of `type`, not `sumtype_meta`.
 			This is so that subclasses of the created sum type won't get
 			processed by `sumtype_meta` again.
 
-			if it is passed `process_class=False`, it just forwards the call to type.__new__()
+			if it is passed `_process_class=False`, it just forwards the call to type.__new__()
 			without any processing. This is used for the `sumtype` convenience class.
 		"""
+		if __debug__:
+			_default_options_for_generated_classes = dct.get('_default_options_for_generated_classes')
+			if _default_options_for_generated_classes:
+				assert not _process_class, (
+					'_default_options_for_generated_classes can only be present if _process_class=False'
+				)
 
-		if not process_class:
-			return type.__new__(metacls, typename, bases, dct)
+		if not _process_class:
+			ConvenienceClass = type.__new__(metacls, typename, bases, dct)
+			return ConvenienceClass
+
+
+		# 'parse' the class definition to get a typespec for `make_sumtype(...)
+
 
 		o_variants = dct.pop('__variants__', None)
 		if o_variants is not None:
@@ -77,20 +104,27 @@ class sumtype_meta(type):
 
 		module_name = dct['__module__']
 
+		all_options = _resolve_default_options(bases)
+		all_options.update(options)
 
-		Class = make_sumtype(typename, variant_specs, _module_name=module_name, **kwargs)
+		GeneratedClass = make_sumtype(
+			typename,
+			variant_specs,
+			_module_name=module_name,
+			**all_options,
+		)
 
 
-		# Append the the generated docstring to original docstring to 
+		# Append the generated docstring to the original docstring
 		original_doc = dct.pop('__doc__', None)
 		if original_doc:
-			Class.__doc__ = inspect.cleandoc(original_doc) + '\n\n' + Class.__doc__
+			GeneratedClass.__doc__ = inspect.cleandoc(original_doc) + '\n\n' + GeneratedClass.__doc__
 
 		# Insert the rest of the class dict - stuff like user-defined methods
 		for (name, val) in dct.items():
-			setattr(Class, name, val)
+			setattr(GeneratedClass, name, val)
 
-		return Class
+		return GeneratedClass
 
 
 
