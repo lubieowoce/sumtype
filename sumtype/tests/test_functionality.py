@@ -117,8 +117,8 @@ def make_thing_call(sumtype, user_options=None) -> type:
 def test_thing(Thing, user_options=None):
 	if user_options is None: user_options = {}
 	# inclusion test works on items, not dicts
-	assert user_options.items() <= Thing._options.items(), (
-		repr(Thing._options.items() - user_options.items())
+	assert is_subdict(user_options, Thing._options), (
+		repr((user_options, Thing._options))
 	)
 	options = Thing._options
 
@@ -373,6 +373,14 @@ def test_thing(Thing, user_options=None):
 
 	# foo._Foo_y = 10
 	# print(foo)
+
+
+def is_subdict(a: dict, b: dict) -> bool:
+	 return all(
+	 	k in b  and  b[k] == v
+		for k, v in a.items()
+	)
+
 
 
 if __name__ == '__main__':
