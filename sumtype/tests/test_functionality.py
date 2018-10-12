@@ -114,8 +114,10 @@ def make_thing_call(sumtype, user_options=None) -> type:
 
 
 
-def test_thing(Thing, user_options=None):
+def test_thing(Thing, usage: str, user_options=None):
 	if user_options is None: user_options = {}
+	assert usage in ('old_style', 'constants_style'), usage
+
 	# inclusion test works on items, not dicts
 	assert is_subdict(user_options, Thing._options), (
 		repr((user_options, Thing._options))
@@ -131,7 +133,11 @@ def test_thing(Thing, user_options=None):
 	foo = Thing.Foo(3, 5)
 	bar = Thing.Bar("nice")
 	zap = Thing.Zap(15.234)
-	hop = Thing.Hop if options.get('constants') else Thing.Hop()
+	hop = (
+		Thing.Hop   if usage == 'constants_style' else
+		Thing.Hop() if usage == 'old_style' else
+		NotImplemented
+   )
 
 	# print("Attribute access:")
 	all_variant_fields = uniq( sum((Thing._variant_fields[variant] for variant in Thing._variants), ()) )
@@ -197,8 +203,22 @@ def test_thing(Thing, user_options=None):
 		assert expr, '{!r} failed for {!r}'.format(expr, x)
 
 
-	variant_args1 = ((3, 5,),  ("nice",), (15.234,), None if options.get('constants') else ())
-	variant_args2 = ((0, 10,), ("bad",),  (3.1415,), None if options.get('constants') else ())
+	variant_args1 = (
+		(3, 5,),
+		("nice",),
+		(15.234,),
+		(()   if usage == 'old_style' else
+		 None if usage == 'constants_style'
+		 else  NotImplemented)
+	)
+	variant_args2 = (
+		(0, 10,),
+		("bad",),
+		(3.1415,),
+		(()   if usage == 'old_style' else
+		 None if usage == 'constants_style' else
+		 NotImplemented)
+	)
 
 	expr = "C(*args1) == C(*args1)"
 	for (C, args1) in b.zip(Thing._constructors, variant_args1):
@@ -381,50 +401,76 @@ def is_subdict(a: dict, b: dict) -> bool:
 		for k, v in a.items()
 	)
 
-
+# def invert_multidict(d: 'Dict[K, List[V]]') -> 'Dict[V, K]':
+# 	pass
 
 if __name__ == '__main__':
 	print('Running tests')
 	print()
-	for user_options in (dict(), dict(constants=True), dict(constants=False)):
-		for sumtype in (st.sumtype, st.future.sumtype):
-			for make_thing in (make_thing_classdef_old, make_thing_classdef_new, make_thing_call):
-				Thing = make_thing(sumtype, user_options)
-				err_msg = '{} ~> <Thing{}>'.format(
-					sumtype.__module__+'.'+sumtype.__name__,
-					options_repr(user_options)
+
+	usages = ('old_style', 'constants_style')
+
+	should_work_like = {
+		'old_style': [
+			(st.sumtype,        dict()),
+			(st.future.sumtype, dict(constants=False))
+		],
+		'constants_style': [
+			(st.sumtype,        dict(constants=True)),
+			(st.future.sumtype, dict())
+		],
+	}
+	do_create = {
+		'old_style': [
+			make_thing_classdef_old,
+			make_thing_call,
+		],
+		'constants_style': [
+			make_thing_classdef_new,
+			make_thing_call,
+		],
+	}
+
+
+	for usage in usages:
+		sumtypes_and_options = should_work_like[usage]
+		make_thing_fns = do_create[usage]
+
+		for sumtype, user_options in sumtypes_and_options:
+			for make_thing in make_thing_fns:
+
+				tested = '{cls} ~> <Thing{opts}> (used {usage})'.format(
+					cls=sumtype.__module__+'.'+sumtype.__name__,
+					opts=options_repr(user_options),
+					usage=usage,
 				)
+				
 				try:
-					test_thing(Thing, user_options)
+					Thing = make_thing(sumtype, user_options)
+					test_thing(Thing, usage=usage, user_options=user_options)
 				except Exception as e:
-					e2 = e.__class__(err_msg)
+					e2 = e.__class__(tested)
 					raise e2 from e
 				else:
 					print(
-						'All {} ~> <Thing{}> tests OK'.format(
-							sumtype.__module__+'.'+sumtype.__name__,
-							options_repr(user_options)
-						)
+						'All {} tests OK'.format(tested)
 					)
 					# print(Thing._options )
 			print()
 
 	for sumtype in (st.sumtype, st.future.sumtype):
 		for Void in (make_void_classdef(sumtype), make_void_call(sumtype)):
+			tested = '{} ~> <Void>'.format(
+				sumtype.__module__+'.'+sumtype.__name__,
+			)
 			try:
 				test_void(Void)
 			except Exception as e:
-				e2 = e.__class__(
-					'{} ~> <Void>'.format(
-						sumtype.__module__+'.'+sumtype.__name__,
-					)
-				)
+				e2 = e.__class__(tested)
 				raise e2 from e
 			else:
 				print(
-					'All {} ~> <Void> tests OK'.format(
-						sumtype.__module__+'.'+sumtype.__name__,
-					)
+					'All {} tests OK'.format(tested)
 				)
 
 	print()

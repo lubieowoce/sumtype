@@ -79,7 +79,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 	which is an instance of `type`, not `sumtype_meta`,
 	and the metaclass wouldn't be 'forwarded' to `Thing`.
 	"""
-	_options_for_generated_classes = {}
+	_default_options_for_generated_classes = {}
 
 	# READERS: There's a bunch of stuff about '_module_name' here,
 	# because we need to give the generated classes the __module__ that they were

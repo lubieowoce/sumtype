@@ -8,7 +8,7 @@ def error_deprecated():
 
 
 class future_sumtype(current_sumtype, _process_class=False):
-	_options_for_generated_classes=dict(constants=True)
+	_default_options_for_generated_classes=dict(constants=True)
 
 	@classmethod
 	def with_constructors(cls, *_args, **_kwargs):

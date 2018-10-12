@@ -4,6 +4,7 @@ from .sumtype_slots import sumtype as make_sumtype
 import inspect
 from collections import OrderedDict
 import typing
+from typing import Tuple, Union, List
 
 __all__ = [
 	'sumtype_meta',
@@ -15,7 +16,8 @@ __all__ = [
 
 is_variant_name = lambda name: name and name.isidentifier() and name[0].isupper()
 
-def _resolve_default_options(bases: 'typing.Tuple[type, ...]') -> 'dict':
+def _resolve_default_options(bases: 'Tuple[type, ...]') -> 'dict':
+	"Collect all default options defined in convenience base-classes like `sumtype`"
 	collected_options = {}
 	for base in reversed(bases): # newer options override old ones
 		options = getattr(base, '_default_options_for_generated_classes', {})
@@ -41,12 +43,12 @@ class sumtype_meta(type):
 	def __new__(
 			metacls, 
 			typename: 'str', 
-			bases: 'typing.Tuple[type, ...]', 
+			bases: 'Tuple[type, ...]', 
 			dct: 'dict', 
 			*, 
 			_process_class: 'bool' = True, 
-			 **options
-		 ) -> 'typing.Union[sumtype_meta, type]':
+			 **user_options
+		 ) -> 'Union[sumtype_meta, type]':
 		"""
 		Note:
 			Unless it's passed `_process_class=False`,
@@ -71,6 +73,44 @@ class sumtype_meta(type):
 
 		# 'parse' the class definition to get a typespec for `make_sumtype(...)
 
+		options = _resolve_default_options(bases)
+		options.update(user_options)
+
+		def interpret_constructor(variant: str, constructor_stub) -> 'Tuple[str, List[Tuple[str, type]]]':
+			if inspect.isroutine(constructor_stub):
+				field_spec = []
+				type_hints = typing.get_type_hints(constructor_stub)
+				for (field, _param_descr) in inspect.signature(constructor_stub).parameters.items():
+					field_type = type_hints.get(field, typing.Any)
+					field_spec.append((field, field_type))
+				return (variant, field_spec)
+			else:
+				raise TypeError(
+					"Constructor stub '{variant}' must be a function, is '{constructor_stub.__class__.__qualname__}'" \
+						.format(variant=variant, constructor_stub=constructor_stub)
+				)
+		
+
+		if options.get('constants'):
+			interpret_constructor_function = interpret_constructor
+
+			def interpret_constructor(variant: str, constructor_stub) -> 'Tuple[str, List[Tuple[str, type]]]': 
+				if constructor_stub is ...:
+					return (variant, [])
+				elif inspect.isroutine(constructor_stub):
+					res = _variant, field_spec = interpret_constructor_function(variant, constructor_stub)
+					if len(field_spec) == 0:
+						raise TypeError(
+							"Constructor stub '{variant}' must declare at least one field when `constants=True`\n"+
+							"(Use `{variant} = ...` for variants with no fields)"
+						).format(variant=variant)
+					return res
+				else:
+					raise TypeError(
+						"Constructor stub '{variant}' must be a function or `...`, is '{constructor_stub.__class__.__qualname__}'" \
+							.format(variant=variant, constructor_stub=constructor_stub)
+					)
+			
 
 		o_variants = dct.pop('__variants__', None)
 		if o_variants is not None:
@@ -80,38 +120,26 @@ class sumtype_meta(type):
 		else:
 			variants_and_constructor_stubs = [
 				(name, val) for (name, val) in dct.items()
-				if is_variant_name(name) and (
-					val is ... or inspect.isroutine(val)
-				)
+				if is_variant_name(name)
 			]
+
+		variant_specs = [
+			interpret_constructor(variant, constructor_stub) 
+			for (variant, constructor_stub) in variants_and_constructor_stubs
+		]
 
 		# remove the constructor stubs from the namespace
 		for (variant, _) in variants_and_constructor_stubs:
 			del dct[variant]
 
-		variant_specs = []
-		for (variant, constructor_stub) in variants_and_constructor_stubs:
-			if inspect.isroutine(constructor_stub):
-				field_spec = []
-				hints = typing.get_type_hints(constructor_stub)
-				for (field, _param_descr) in inspect.signature(constructor_stub).parameters.items():
-					field_type = hints.get(field, typing.Any)
-					field_spec.append((field, field_type))
-				spec = (variant, field_spec)
-			else:
-				spec = (variant, []) # no arg constructor defined with `Variant = ...`
-			variant_specs.append(spec)
-
 		module_name = dct['__module__']
 
-		all_options = _resolve_default_options(bases)
-		all_options.update(options)
 
 		GeneratedClass = make_sumtype(
 			typename,
 			variant_specs,
 			_module_name=module_name,
-			**all_options,
+			**options,
 		)
 
 
