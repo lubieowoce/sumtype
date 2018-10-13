@@ -16,6 +16,13 @@ __all__ = [
 
 is_variant_name = lambda name: name and name.isidentifier() and name[0].isupper()
 
+
+def _resolve_options(user_options: dict, bases: 'Tuple[type, ...]') -> 'dict':
+	options = _resolve_default_options(bases)
+	options.update(user_options)
+	return options
+
+
 def _resolve_default_options(bases: 'Tuple[type, ...]') -> 'dict':
 	"Collect all default options defined in convenience base-classes like `sumtype`"
 	collected_options = {}
@@ -23,6 +30,8 @@ def _resolve_default_options(bases: 'Tuple[type, ...]') -> 'dict':
 		options = getattr(base, '_default_options_for_generated_classes', {})
 		collected_options.update(options)
 	return collected_options
+
+
 
 
 class sumtype_meta(type):
@@ -73,8 +82,7 @@ class sumtype_meta(type):
 
 		# 'parse' the class definition to get a typespec for `make_sumtype(...)
 
-		options = _resolve_default_options(bases)
-		options.update(user_options)
+		options = _resolve_options(user_options, bases)
 
 		def interpret_constructor(variant: str, constructor_stub) -> 'Tuple[str, List[Tuple[str, type]]]':
 			if inspect.isroutine(constructor_stub):

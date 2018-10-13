@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from .sumtype_meta import sumtype_meta, _resolve_default_options
+from .sumtype_meta import sumtype_meta, _resolve_options
 from .sumtype_slots import sumtype         as make_sumtype
 from .sumtype_slots import untyped_sumtype as make_untyped_sumtype
 __all__ = ['sumtype']
@@ -94,8 +94,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 			T = sumtype('T', ...)
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_default_options(cls.mro())
-		options.update(user_options)
+		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		return make_sumtype(typename, variant_names_and_specs, **options)
 
@@ -109,8 +108,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 			T, V1, V2 = sumtype.with_constructors('T', [('V1', [...]), ('V2', [...])]
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_default_options(cls.mro())
-		options.update(user_options)
+		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		t = make_sumtype(typename, variant_names_and_specs, **options)
 		return (t,) + t._constructors
@@ -122,8 +120,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 			T = sumtype.untyped('T', ...)
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_default_options(cls.mro())
-		options.update(user_options)
+		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		return make_untyped_sumtype(typename, variant_names_and_specs, **options)
 
@@ -135,8 +132,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 		See `help(sumtype)` for more.
 		"""
 		"A wrapper around `sumtype_slots.make_untyped_sumtype().`"
-		options = _resolve_default_options(cls.mro())
-		options.update(user_options)
+		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		t = make_untyped_sumtype(typename, variant_names_and_specs, **options)
 		return (t,) + t._constructors
@@ -170,7 +166,7 @@ def demo():
 		def Foo(x: int, y: int): ...
 		def Bar(y: str): ...
 		def Zip(hey: str): ...
-		Bop = ...
+		def Bop(): ...
 		# ^ constructor stubs (will be filled in by sumtype)
 
 		__doc__ = """
