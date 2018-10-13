@@ -261,17 +261,12 @@ def sumtype(
 		variant = _variant
 
 
+		@property
 		def _constructor(self):
 			"The constructor used to create self"
 			cls = self.__class__
 			return getattr(cls, self._variant)
 
-		_constructor.__annotations__['return'] = (
-			Union[typename, Callable[..., typename]]
-			if constants else
-			Callable[..., typename]
-		)
-		_constructor = property(_constructor)
 		
 
 		def _values_dict(self) -> OrderedDict:
@@ -1079,7 +1074,7 @@ def sumtype(
 
 	# __repr__
 
-	mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields: [
+	mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields, constants: [
 		'def __repr__(self) -> str:', [
 			'variant_id = self._variant_id',
 			*cond(
@@ -1093,7 +1088,7 @@ def sumtype(
 									kwargs=[(field, '{self._'+variant+'_'+field+'!r}') for field in fields]
 								) +
 								'".format(self=self)'
-							) if fields else (
+							) if fields or not constants else (
 							'"'+typename+'.'+variant+'"'
 							)
 						)
@@ -1112,7 +1107,8 @@ def sumtype(
 				typename=typename,
 				variant_ids=Class._variant_ids,
 				variants=Class._variants,
-				variant_id_fields=Class._variant_id_fields
+				variant_id_fields=Class._variant_id_fields,
+				constants=constants,
 			)
 		)
 
@@ -1378,7 +1374,7 @@ def main():
 	foo = Thing.Foo(3, 5)
 	bar = Thing.Bar("nice")
 	zip = Thing.Zip(15.234)
-	hop = Thing.Hop
+	hop = Thing.Hop()
 
 
 	print("Attribute access:")
