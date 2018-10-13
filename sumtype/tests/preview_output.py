@@ -10,7 +10,7 @@ if __name__ == '__main__':
 import typing as t
 from sumtype import sumtype
 
-class Thing(sumtype, verbose=True):
+class Thing(sumtype, constants=True, verbose=True):
 # class Thing(sumtype):
 	# def Foo(x: t.Tuple[int, str], y: int): ...
 	def Foo(x: int, y: int): ...
@@ -57,7 +57,7 @@ print(repr(res))
 print()
 
 print('##################################')
-class Color(sumtype, verbose=True):
+class Color(sumtype, constants=True, verbose=True):
 	Red = ...
 	Green = ...
 	Blue = ...
