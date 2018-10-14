@@ -8,7 +8,7 @@ with open(path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
 	name     = 'sumtype',
-	version  = '0.10.0.post4',
+	version  = '0.11.b0',
 	packages = find_packages(exclude=['tests']),
 	
 	python_requires = '>=3',
