@@ -8,6 +8,7 @@ from .sumtype_slots import untyped_sumtype as make_untyped_sumtype
 
 # Expose submodules
 # from . import sumtype	 		  as sumtype
+from . import future
 from . import sumtype_meta 		  as meta
 from . import sumtype_slots       as slots
 from . import experimental
