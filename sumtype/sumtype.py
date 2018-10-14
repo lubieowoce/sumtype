@@ -1,6 +1,6 @@
 from typing import Tuple
 
-from .sumtype_meta import sumtype_meta, _resolve_options
+from .sumtype_meta import sumtype_meta
 from .sumtype_slots import sumtype         as make_sumtype
 from .sumtype_slots import untyped_sumtype as make_untyped_sumtype
 __all__ = ['sumtype']
@@ -9,7 +9,7 @@ import sys
 from warnings import warn
 
 
-class sumtype(metaclass=sumtype_meta, _process_class=False):
+class sumtype(metaclass=sumtype_meta, process_class=False):
 	"""The main user-facing API of this package.
 	
 	This class is just a wrapper around stuff defined inside -
@@ -26,13 +26,13 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 
 	Think of `def Foo(x: int, y: int): ...` as a constructor stub.
 	Note that those are literal Python ellipses (`...`), not elided code -
-	`sumtype` will generate the constructors,
+	`sumtype()` will generate the constructors,
 	it's just a relatively convenient syntax for declaring variants.
 	(If you like Haskell, think 'GADT syntax')
 
-	You can pass keyword arguments to `sumtype()` like so:
+	You can pass keyword arguments to `union()` like so:
 
-		class Thing(sumtype, verbose=True):
+		class Thing(sumtype, immutable=False, verbose=True):
 			def Foo(x: int, y: int): ...
 			def Bar(y: str): ...
 			def Zip(hey: str): ...
@@ -51,7 +51,8 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 		Thing, Variant1, Variant2 = sumtype.untyped_with_constructors('Thing', [('Variant1', ['x', 'y']), ('Variant2', [...])])
 
 	...but that might get removed in a future release -
-	it's mostly here because a large codebase of mine used that form.
+	it's mostly here because a large codebase of mine still uses that form
+	and I haven't migrated it yet. 
 	Consider using
 		T = sumtype('T', ...)
 		Variant1, Variant2 = T._constructors
@@ -61,7 +62,7 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 	## Implementation notes
 
 	This class is just a wrapper around `sumtype_meta.sumtype_meta`
-	(which in turn wraps `sumtype_slots.sumtype(...)/untyped_sumtype(...)`).
+	and `sumtype_slots.sumtype/untyped_sumtype()`.
 
 	It has to be a class for the users to be able to write
 		class Thing(sumtype):
@@ -74,12 +75,12 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 	Its only role is to 'forward' the metaclass to `Thing` -
 	it won't actually be added to `Thing.__mro__`.
 
-	The `_process_class=False` metaclass keyword argument is necessary,
+	The `process_class=False` metaclass keyword argument is necessary,
 	because without it, `sumtype_meta` would turn it into variant class with no variants,
 	which is an instance of `type`, not `sumtype_meta`,
 	and the metaclass wouldn't be 'forwarded' to `Thing`.
 	"""
-	_default_options_for_generated_classes = {}
+
 
 	# READERS: There's a bunch of stuff about '_module_name' here,
 	# because we need to give the generated classes the __module__ that they were
@@ -88,51 +89,47 @@ class sumtype(metaclass=sumtype_meta, _process_class=False):
 
 	# HACKY
 	# (because, well, that's not what __new__ is supposed to do)
-	def __new__(cls, typename, variant_names_and_specs, **user_options) -> type:
+	def __new__(cls, typename, variant_names_and_specs, **options) -> type:
 		"""A wrapper around `sumtype_slots.sumtype()`
 		to support namedtuple-style definitions:
 			T = sumtype('T', ...)
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		return make_sumtype(typename, variant_names_and_specs, **options)
 
 	# swallow the arguments passed to __new__()
-	def __init__(cls, typename, variant_names_and_specs, **user_options): pass
+	def __init__(cls, typename, variant_names_and_specs, **options): pass
 		
 	@classmethod
-	def with_constructors(cls, typename, variant_names_and_specs, **user_options) -> Tuple[type, ...]:
+	def with_constructors(cls, typename, variant_names_and_specs, **options) -> Tuple[type, ...]:
 		"""A wrapper around `sumtype_slots.sumtype()`
 		to support namedtuple-style definitions:
 			T, V1, V2 = sumtype.with_constructors('T', [('V1', [...]), ('V2', [...])]
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		t = make_sumtype(typename, variant_names_and_specs, **options)
 		return (t,) + t._constructors
 		
 	@classmethod
-	def untyped(cls, typename, variant_names_and_specs, **user_options) -> type:
+	def untyped(cls, typename, variant_names_and_specs, **options) -> type:
 		"""A wrapper around `sumtype_slots.untyped_sumtype()`
 		to support namedtuple-style definitions:
 			T = sumtype.untyped('T', ...)
 		See `help(sumtype)` for more.
 		"""
-		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		return make_untyped_sumtype(typename, variant_names_and_specs, **options)
 
 	@classmethod
-	def untyped_with_constructors(cls, typename, variant_names_and_specs, **user_options) -> Tuple[type, ...]:
+	def untyped_with_constructors(cls, typename, variant_names_and_specs, **options) -> Tuple[type, ...]:
 		"""A wrapper around `sumtype_slots.untyped_sumtype()`
 		to support namedtuple-style definitions:
 			T, V1, V2 = sumtype.untyped_with_constructors('T', [('V1', [...]), ('V2', [...])]
 		See `help(sumtype)` for more.
 		"""
 		"A wrapper around `sumtype_slots.make_untyped_sumtype().`"
-		options = _resolve_options(user_options, cls.mro())
 		options['_module_name'] = get_callers_module_if_necessary_or_warn(options, typename)
 		t = make_untyped_sumtype(typename, variant_names_and_specs, **options)
 		return (t,) + t._constructors

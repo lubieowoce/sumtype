@@ -5,8 +5,8 @@ A `namedtuple`-style library for defining immutable **sum types** in Python. ([G
 > they're also referred to as `tagged unions`, `enums` in Rust/Swift, and `variants` in C++. 
 > If you haven't heard about them yet, [here's](https://chadaustin.me/2015/07/sum-types/) a nice introduction.*
 
-The current stable version is `0.10.0`.
-The library supports Python 3.5+.
+The current version is `0.10.0`, quickly approaching `1.0`.
+The library supports Python 3.x.
 The core code has lived in various `utils` folders for about a year,
 before I got tired of copying it around and decided to release it as an independent package.
 (see also: [Should I use it?](https://github.com/lubieowoce/sumtype#should-i-use-it))
