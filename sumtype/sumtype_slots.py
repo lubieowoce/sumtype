@@ -533,7 +533,7 @@ def sumtype(
 
 
 	all_variant_fields = uniq( sum(Class._variant_id_fields, ()) )
-	variant_ids_that_have_attr = {
+	variant_ids_that_have_field = {
 		attr: [
 			id_ for id_ in Class._variant_ids
 			if attr in Class._variant_id_fields[id_]
@@ -576,6 +576,7 @@ def sumtype(
 	_values = eval_def(def_values)
 	_values.__qualname__ = typename+'.'+_values.__name__
 	_values.__module__ = _module_name
+	_values.__doc__ = "Get the field values as a tuple."
 	Class._values = _values
 	Class.values  = _values
 
@@ -589,6 +590,7 @@ def sumtype(
 	_as_tuple = eval_def(def_as_tuple)
 	_as_tuple.__qualname__ = typename+'.'+_as_tuple.__name__
 	_as_tuple.__module__ = _module_name
+	_as_tuple.__doc__ = "Get the variant name and field values as a tuple."
 	Class._as_tuple = _as_tuple
 	Class.as_tuple  = _as_tuple 
 	Class._astuple  = _as_tuple # namedtuple convention
@@ -606,6 +608,7 @@ def sumtype(
 	_as_dict = eval_def(def_as_dict)
 	_as_dict.__qualname__ = typename+'.'+_as_dict.__name__
 	_as_dict.__module__ = _module_name
+	_as_dict.__doc__ = "Get a dict with the variant name and field names/values."
 	Class._as_dict = _as_dict
 	Class.as_dict  = _as_dict 
 	Class._asdict  = _as_dict # namedtuple convention
@@ -671,6 +674,7 @@ def sumtype(
 	_match = eval_def(def_match)
 	_match.__qualname__ = typename+'.'+_match.__name__
 	_match.__module__ = _module_name
+	_match.__doc__ = "See https://github.com/lubieowoce/sumtype#pattern-matching"
 	Class._match = _match
 	Class.match  = _match 
 
@@ -742,14 +746,14 @@ def sumtype(
 	# field getters
 
 	for field in all_variant_fields:
-		valid_variant_ids = variant_ids_that_have_attr[field]
+		valid_variant_ids = variant_ids_that_have_field[field]
 		assert len(valid_variant_ids) >= 1, (
 			"Internal error creating {name}:\n" + 
 			"field {field} is present in `all_variant_fields` even though no variants seem have it.\n" + 
 			"Debug:\n" +
 			"variant_specs = {variant_specs}\n" + 
 			"all_variant_fields = {all_variant_fields}\n" + 
-			"variant_ids_that_have_attr={variant_ids_that_have_attr}\n"
+			"variant_ids_that_have_field={variant_ids_that_have_field}\n"
 		) .format(**locals())
 
 		def_getter = \
