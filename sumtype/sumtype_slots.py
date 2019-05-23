@@ -187,7 +187,7 @@ def sumtype(
 	if maybe_typechecked is None:
 		raise ValueError(
 			"Argument 'typecheck' must be one of {!r}; got {!r}"\
-				.format(tuple(typecheck_opts.keys()))
+				.format(tuple(typecheck_opts.keys()), typecheck)
 		)
 
 	# variant_attr_names = [attr_names for (variant_name, attr_names) in variant_specs]
