@@ -560,53 +560,18 @@ def sumtype(
 	# A compiler could skip creating that tuple because it
 	# immediately gets deconstructed or inline the code, but Python is interpreted.
 
-	_set_attr = 'cls._unsafe_set_{attr}({obj}, {val})'
-
-	# template function for multiple functions that just pack the fields into a structure and return it
-
-	mk_def_convert = lambda func_name, ret_type, mk_result, variant_ids, variant_id_fields, variants: [
-		'def '+func_name+'(self) -> '+ret_type+':', [
-			'_variant_id = self._variant_id',
-			*cond(
-				[ when("_variant_id == "+lit(id_), [
-					"return " + mk_result(
-						selfname='self',
-						id_varname='_variant_id',
-						id_=id_,
-						variant=variant, fields=fields)
-					# "return " + tuple_(
-					#	['_variant_id'] + [ 'self._{variant}_{field}'.format(variant=variant, field=field) for field in fields ])
-				  ])
-				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				],
-				default=['raise self.__class__._get_invalid_variant_error(_variant_id)'],
-				allow_zero_cases=True
-			)
-		],
-	]
-	mk_def_convert = partial(
-			mk_def_convert,
-			variant_ids=Class._variant_ids,
-			variant_id_fields=Class._variant_id_fields,
-			variants=Class._variants
+	conversion_function_info = dict(
+		variant_ids=Class._variant_ids,
+		variant_id_fields=Class._variant_id_fields,
+		variants=Class._variants
 	)
 
 
 	#._values()
 
-	mk_values_result = lambda selfname, id_varname, id_, variant, fields: \
-		tuple_( '{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields)
-	def_values = \
-		flatten_tree(
-			mk_def_convert(
-				func_name='values',
-				ret_type='tuple',
-				mk_result=mk_values_result,
-			)
-		)
+	def_values = flatten_tree(mk_def_values(**conversion_function_info))
 
-	if verbose:
-		print(def_values, end='\n\n')
+	if verbose: print(def_values, end='\n\n')
 
 	_values = eval_def(def_values)
 	_values.__qualname__ = typename+'.'+_values.__name__
@@ -617,19 +582,9 @@ def sumtype(
 
 	# ._as_tuple()
 
-	mk_as_tuple_result = lambda selfname, id_varname, id_, variant, fields: \
-		tuple_([lit(variant)]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
+	def_as_tuple = flatten_tree(mk_def_as_tuple(**conversion_function_info))
 
-	def_as_tuple = \
-		flatten_tree(
-			mk_def_convert(
-				func_name='_as_tuple',
-				ret_type='tuple',
-				mk_result=mk_as_tuple_result,
-			)
-		)
-	if verbose:
-		print(def_as_tuple, end='\n\n')
+	if verbose: print(def_as_tuple, end='\n\n')
 		
 	_as_tuple = eval_def(def_as_tuple)
 	_as_tuple.__qualname__ = typename+'.'+_as_tuple.__name__
@@ -641,35 +596,12 @@ def sumtype(
 
 
 	# ._as_dict()
-	Class._OrderedDict = OrderedDict
-	mk_as_dict_result = lambda selfname, id_varname, id_, variant, fields: \
-		apply(selfname+'.__class__._OrderedDict', [
-			tuple_(
-				[tuple_([lit('variant'), lit(variant)])]
-				+
-				[ tuple_([lit(field), '{selfname}._{variant}_{field}'\
-											.format(selfname=selfname, variant=variant, field=field)])
-				  for field in fields ]
-			)
-		])
 
-	# mk_as_dict_result = lambda selfname, id_varname, id_, variant, fields: \
-	# 	dict_(
-	# 		[(lit('variant'), lit(variant))] +
-	# 		[ (lit(field), '{selfname}._{variant}_{field}'\
-	# 							.format(selfname=selfname, variant=variant, field=field))
-	# 		  for field in fields ]
-	# 	)
-	def_as_dict = \
-		flatten_tree(
-			mk_def_convert(
-				func_name='_as_dict',
-				ret_type=lit('OrderedDict'),
-				mk_result=mk_as_dict_result,
-			)
-		)
-	if verbose:
-		print(def_as_dict, end='\n\n')
+	Class._OrderedDict = OrderedDict # EXTERNAL DEPENDENCY
+
+	def_as_dict = flatten_tree(mk_def_as_dict(**conversion_function_info))
+
+	if verbose: print(def_as_dict, end='\n\n')
 		
 	_as_dict = eval_def(def_as_dict)
 	_as_dict.__qualname__ = typename+'.'+_as_dict.__name__
@@ -682,19 +614,9 @@ def sumtype(
 
 	# .__getstate__()
 
-	mk_getstate_result = lambda selfname, id_varname, id_, variant, fields: \
-		tuple_([id_varname]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
-	def_getstate = \
-		flatten_tree(
-			mk_def_convert(
-				func_name='__getstate__',
-				ret_type='tuple',
-				mk_result=mk_getstate_result,
-			)
-		)
+	def_getstate = flatten_tree(mk_def_getstate(**conversion_function_info))
 
-	if verbose:
-		print(def_getstate, end='\n\n')
+	if verbose: print(def_getstate, end='\n\n')
 
 	__getstate__ = eval_def(def_getstate)
 	__getstate__.__qualname__ = typename+'.'+__getstate__.__name__
@@ -702,108 +624,9 @@ def sumtype(
 	Class.__getstate__ = __getstate__
 
 
-	def mk_def_replace(typename, typecheck, variant_ids, variants, variant_id_fields, variant_id_types, _set_attr):
-		with_fields    = [
-			(id_, variant, fields, types)
-			for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
-			if fields
-		]
-		without_fields = [
-			(id_, variant, fields, types)
-			for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
-			if not fields
-		]
+	# ._replace()
 
-		if typecheck == 'always' or (typecheck == 'debug' and __debug__):
-			set_fields = lambda variant, fields, types: \
-				[tuple_(field+'_type' for field in fields)+' = cls._variant_id_types[variant_id]',
-				 ''] \
-				+ \
-				concat(
-					['new_{field} = fields_and_new_vals_pop("{field}", self._{attr})'.format(field=field, attr=(variant+'_'+field)),
-					 *(['cls.assert_type(\'field "{field}"\', new_{field}, {field}_type)'.format(field=field)]
-					   if type_ is not Any and type_ is not object else []
-					  ),
-					 _set_attr.format(obj='new', attr=(variant+'_'+field), val='new_'+field),
-					 ''
-					]
-					 for (field, type_) in zip(fields, types)
-				)
-		else:
-			set_fields = lambda variant, fields, _types: [
-				 _set_attr.format(
-				 	obj='new',
-				 	attr=(variant+'_'+field),
-				 	val='fields_and_new_vals_pop("{field}", self._{attr})'.format(
-				 		field=field,
-				 		attr=(variant+'_'+field)
-				 	)
-				 )
-				 for field in fields
-			]
-
-
-
-		return [
-			'def _replace(self, **fields_and_new_vals) -> '+lit(typename)+':', [
-				'"""',
-				"Analogous to `namedtuple`'s `_replace`.",
-				"Returns a new value with fields modified according",
-				"to the keyword arguments.",
-				'"""',
-				'cls = self.__class__',
-				'new = cls.__new__(cls)',
-				'',
-				'variant_id = self._variant_id',
-				_set_attr.format(obj='new', attr='variant_id', val='variant_id'),
-				'',
-				'# make local to avoid lookups',
-				'fields_and_new_vals_pop = fields_and_new_vals.pop',
-				'',
-				*cond(
-					# nothing to do on variants with no fields
-					([when(
-						join_with_op(
-							['variant_id == '+lit(id_) for (id_, _, _, _) in without_fields],
-							op='or', zero=False,
-						),
-						['if not fields_and_new_vals: return new'])
-					] if without_fields else [])
-					+
-					# variants with fields
-					[ when('variant_id == '+lit(id_), 
-						set_fields(variant, fields, types)
-						+
-						['if not fields_and_new_vals: return new']
-					  )
-					  for (id_, variant, fields, types) in with_fields
-					],
-					default=['raise cls._get_invalid_variant_error(variant_id)'],
-					allow_zero_cases=True,
-				),
-				'',
-				# 'if not fields_and_new_vals:', [
-				# 	'return new',
-				# ],
-				# 'else:', [
-				'first_bad_field = next(iter(fields_and_new_vals))',
-				'if first_bad_field.startswith("_"):', [
-					"# Catch this here. if __getattr__ sees this name,", 
-					"# it will (correctly) guess that it can't be a field,",
-					"# and will show the generic 'object doesn't have attribute x' error",
-					"# However, if someone tries to `a._replace(_variant_id=15)`, the message will",
-					"# be confusing, because the objects clearly *do* have a '_variant_id' attribute.", 
-					'raise TypeError("_replace() can only modify fields, and \'{}\' is not a field".format(first_bad_field))',
-				],
-				'else:', [
-					'# getattr should give a nice error message',
-					'self.__getattr__(first_bad_field)',
-				],
-				# ],
-			],
-		]
-
-	replace_ = \
+	def_replace = \
 		flatten_tree(
 			mk_def_replace(
 				typename=typename,
@@ -815,65 +638,25 @@ def sumtype(
 				_set_attr=_set_attr,
 			)
 		) 
-	if verbose:
-		print(replace_, end='\n\n')
 
-	_replace = eval_def(replace_)
+	if verbose: print(def_replace, end='\n\n')
+
+	_replace = eval_def(def_replace)
 	_replace.__qualname__ = typename+'.'+_replace.__name__
 	_replace.__module__ = _module_name
+	_replace.__doc__ = (
+		"Analogous to `namedtuple`'s `_replace`.\n"
+		"Returns a new value with fields modified according\n"
+		"to the keyword arguments.\n"
+	)
 	Class._replace = _replace
 	Class.replace  = _replace
 	Class.set      = _replace
 	Class.update   = _replace
 
 
-	# match
-
-	mk_def_replace2 = lambda variant_ids, variant_id_fields, variants, all_variant_fields: [
-		'def _replace(self, '+str.join(', ', (field+'=...' for field in all_variant_fields))+'):', [
-			
-		]
-	]
-
-	mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
-		'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _=...):', [
-			'_variant_id = _self._variant_id',
-			*cond(
-				[
-					when('_variant_id == '+lit(id_)+' and '+variant+' is not '+unused, [
-						'return '+apply(variant, ['_self._'+variant+'_'+field for field in fields])
-					])
-					for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				] + \
-				[	
-					when('_ is not '+unused, [
-						'return _()'
-					])
-				],
-				default=[
-					'raise ValueError("Pattern match incomplete - '+
-						'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=_self))'
-				]
-			)
-		]
-	]
-	# mk_def_match = lambda variant_ids, variant_id_fields, variants, all_variant_fields, unused='...': [
-	# 	'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _=...):', [
-	# 		'_case = '+tuple_(variants)+'[_self._variant_id]',
-	# 		'if _case is not '+unused+':' ,[
-	# 			'return _case(*_self._values())'
-	# 		],
-	# 		'elif _ is not '+unused+':' ,[
-	# 			'return _()'
-	# 		],
-	# 		'else:', [
-	# 			'raise ValueError("Pattern match incomplete - '
-	#				 'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=_self))'
-	# 		]
-
-	# 	]
-	# ]
-
+	# .match()
+	
 	def_match = \
 		flatten_tree(
 			mk_def_match(
@@ -882,8 +665,8 @@ def sumtype(
 				variants=Class._variants, 
 			)
 		)
-	if verbose:
-		print(def_match, end='\n\n')
+
+	if verbose: print(def_match, end='\n\n')
 		
 	_match = eval_def(def_match)
 	_match.__qualname__ = typename+'.'+_match.__name__
@@ -893,44 +676,7 @@ def sumtype(
 
 
 	# constructors
-
-	def mk_def_constructor(typename, id_, variant, fields, types):
-		# field_args_decl = [
-		# 	(field+': '+type_literal(type_)) if type_ not in (Any, object) else field
-		# 	for (field, type_) in zip(fields, types)
-		# ]
-		return [
-			def_(variant, ['_cls', *fields]), [
-				'_val = _cls.__new__(_cls)',
-				# _set_attr.format(obj='_val', attr='variant_id', _val=lit(id_)),
-				'_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
-				*(
-				# _set_attr.format(obj='_val', attr=variant+'_'+field, _val=field)
-				"_cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
-				for field in fields
-				),
-				'return _val',
-			],
-		]
-
-	# fast, but doesn't work with defensive setattr 
-	# __set_field = "val.{real_attr} = {field_arg}"
-	# slower because of the extra method lookup, but works with defensive setattr
-	# __set_field = "cls.{real_attr}.__set__(val, {field_arg})"
-	# ^ Uses property descriptors, because normal assignments are blocked to make the values more or less immutable
-
-
-	# TODO:
-	# Possible perf improvement:
-	# Cache the descriptors' __set__ methods to skip one lookup.
-	# This makes setting via descriptor call as fast as setting via '='. 
-	# It introduces a bit of complexity though - it's another thing to
-	# remember. Maybe add this after investigating Pickle integration.
-
-	# Class.__set_variant_id = Class._variant_id.__set__
-	# Class.__set_0 = Class._0.__set__
-	# Class.__set_1 = Class._1.__set__
-
+	
 	constructors = [] # pseudotype: List[ Union[Class, Callable[..., Class]] if constants else Callable[..., Class]]]
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
 		fields = Class._variant_id_fields[id_]
@@ -946,7 +692,7 @@ def sumtype(
 			# create a constructor function
 			types = variant_attr_types[id_]
 			fields_and_types = variant_attr_specs[id_]
-			_def_constructor = \
+			def_constructor = \
 				flatten_tree(
 					mk_def_constructor(
 						typename=typename,
@@ -957,12 +703,11 @@ def sumtype(
 					)
 				)
 
-			if verbose:
-				print(_def_constructor, end='\n\n')
+			if verbose: print(def_constructor, end='\n\n')
 
 			assert not hasattr(Class, variant), \
 				"'{}' already defined. Class dir:\n{}".format(variant, dir(Class))
-			constructor = eval_def(_def_constructor)
+			constructor = eval_def(def_constructor)
 
 			constructor.__qualname__ = '{}.{}'.format(typename, constructor.__name__)
 			constructor.__annotations__ = {
@@ -983,17 +728,10 @@ def sumtype(
 
 	# .is_Foo(), is_Bar(), etc. methods for pattern mathing 
 
-	mk_def_is_some_variant = lambda id_, variant: [
-		'def is_'+variant+'(self) -> bool:', [
-			'return self._variant_id == '+lit(id_),
-		]
-	]
-
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
-		_def_is_some_variant = flatten_tree(mk_def_is_some_variant(id_=id_, variant=variant))
-		if verbose:
-			print(_def_is_some_variant, end='\n\n')
-		is_some_variant = eval_def(_def_is_some_variant)
+		def_is_some_variant = flatten_tree(mk_def_is_some_variant(id_=id_, variant=variant))
+		if verbose: print(def_is_some_variant, end='\n\n')
+		is_some_variant = eval_def(def_is_some_variant)
 		is_some_variant.__qualname__ = typename+'.'+is_some_variant.__name__
 		is_some_variant.__module__ = _module_name
 		setattr(Class, 'is_'+variant, is_some_variant)
@@ -1002,23 +740,6 @@ def sumtype(
 
 
 	# field getters
-
-	mk_def_getter = lambda field, valid_variant_ids, variants: [
-		def_(field, ['self']), [
-			'variant_id = self._variant_id',
-			*cond(
-				[ when('variant_id == '+lit(id_), [
-					'return self._{variant}_{field}'.format(variant=variants[id_], field=field)
-				  ])
-				  for id_ in valid_variant_ids
-				],
-				# the AttributeError gets swallowed by the interpreter, and __getattr__ is called as a fallback
-				default=['raise AttributeError()'], 
-				# default for classes with no variants (unusual but possible)
-				allow_zero_cases=True,
-			),
-		]
-	]
 
 	for field in all_variant_fields:
 		valid_variant_ids = variant_ids_that_have_attr[field]
@@ -1031,7 +752,7 @@ def sumtype(
 			"variant_ids_that_have_attr={variant_ids_that_have_attr}\n"
 		) .format(**locals())
 
-		_def_getter = \
+		def_getter = \
 			flatten_tree(
 				mk_def_getter(
 					field=field,
@@ -1040,11 +761,10 @@ def sumtype(
 				)
 			)
 
-		if verbose:
-			print(_def_getter, end='\n\n')
+		if verbose: print(def_getter, end='\n\n')
 
 		assert not hasattr(Class, field), "'{}' already defined. Class dir:\n{}".format(field, dir(Class))
-		getter = eval_def(_def_getter)
+		getter = eval_def(def_getter)
 		getter.__qualname__ = '{}.{}'.format(typename, getter.__name__)
 		getter.__module__ = _module_name
 
@@ -1074,34 +794,7 @@ def sumtype(
 
 	# __repr__
 
-	mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields, constants: [
-		'def __repr__(self) -> str:', [
-			'variant_id = self._variant_id',
-			*cond(
-				[ when('variant_id == '+lit(id_), [
-						# reuse `apply` to build something like 'return "Foo(x={self.x})".format(self=self)'
-						# because it's good for `foo(a=x, b=y)` syntax
-						'return ' + (
-							(	'"'+ 
-								apply(
-									typename+'.'+variant,
-									kwargs=[(field, '{self._'+variant+'_'+field+'!r}') for field in fields]
-								) +
-								'".format(self=self)'
-							) if fields or not constants else (
-							'"'+typename+'.'+variant+'"'
-							)
-						)
-				  ])
-				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				],
-				default=['raise self.__class__._get_invalid_variant_error(variant_id)'],
-				allow_zero_cases=True,
-			)
-		]
-	]
-
-	_def_repr = \
+	def_repr = \
 		flatten_tree(
 			mk_def_repr(
 				typename=typename,
@@ -1112,54 +805,19 @@ def sumtype(
 			)
 		)
 
-	if verbose:
-		print(_def_repr, end='\n\n')
+	if verbose: print(def_repr, end='\n\n')
 
 
 	
-	__repr__ = eval_def(_def_repr)
+	__repr__ = eval_def(def_repr)
 	__repr__.__qualname__ = '{}.{}'.format(typename, __repr__.__name__)
 	__repr__.__module__ = _module_name
 	Class.__repr__ = __repr__
 
 
 	# __eq__
-
-	mk_def_eq = lambda variant_ids, variants, variant_id_fields: [
-		'def __eq__(a, b) -> bool:', [
-			'if a.__class__ is not b.__class__:', [
-				'return NotImplemented',
-			],
-			'',
-			'a_variant_id = a._variant_id',
-			'b_variant_id = b._variant_id',
-			'if a_variant_id != b_variant_id:', [
-				'return False',
-			],
-			'',
-			*cond(
-				[ when("a_variant_id == "+lit(id_), [
-						# either "return (a._0 == b._0) and (a._1 == b._1) and ...""
-						# or     "return True" if a variant has no fields
-						"return " + \
-							join_with_op(
-								('a._{variant}_{field} == b._{variant}_{field}'.format(variant=variant, field=field)
-										for field in fields
-								),
-								op='and',
-								zero='True',
-							),
-				  ])
-				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-				],
-				default=['raise a.__class__._get_invalid_variant_error(a_variant_id)'],
-				allow_zero_cases=True
-			)
-		],
-	]
-
 	
-	_def_eq = \
+	def_eq = \
 		flatten_tree(
 			mk_def_eq(
 				variant_ids=Class._variant_ids, 
@@ -1168,10 +826,9 @@ def sumtype(
 			)
 		)
 
-	if verbose:
-		print(_def_eq, end='\n\n')
+	if verbose: print(def_eq, end='\n\n')
 
-	__eq__ = eval_def(_def_eq)
+	__eq__ = eval_def(def_eq)
 	__eq__.__qualname__ = typename+'.'+__eq__.__name__
 	__eq__.__module__ = _module_name
 	Class.__eq__ = __eq__
@@ -1179,51 +836,7 @@ def sumtype(
 
 	# __setstate__
 
-	def mk_def_setstate(typename, variant_ids, variants, variant_id_fields, _set_attr):
-		with_fields    = [
-			(id_, variant, fields)
-			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-			if fields
-		]
-		without_fields = [
-			(id_, variant, fields)
-			for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
-			if not fields
-		]
-
-		return [
-			'def __setstate__(self, state: tuple) -> None:', [
-				'cls = self.__class__',
-				'variant_id = state[0]',
-				_set_attr.format(obj='self', attr='variant_id', val='variant_id'),
-				# 'cls._unsafe_set_variant_id(self, variant_id)',
-				*cond(
-					([when(
-						join_with_op(
-							['variant_id == '+lit(id_) for (id_, _, _) in without_fields],
-							op='or', zero=False,
-						),
-						['return'])
-					] if without_fields else [])
-					+
-					[ when('variant_id == '+lit(id_), [
-						tuple_(['_']+['new_'+field for field in fields])+' = state'  
-					  ]+[
-						_set_attr.format(obj='self', attr=variant+'_'+field, val='new_'+field)
-						# 'cls._unsafe_set_{variant}_{field}(self, new_{field})'\
-						# 	.format(field=field, variant=variant)
-						 for field in fields
-						 # for (field_ix, field) in enumerate(variant_id_fields[id_])
-					  ]+['return'])
-					 for (id_, variant, fields) in with_fields
-					],
-					default=['raise cls._get_invalid_variant_error(variant_id)'],
-					allow_zero_cases=True,
-				),
-			],
-		]
-
-	_def_setstate = \
+	def_setstate = \
 		flatten_tree(
 			mk_def_setstate(
 				typename=typename,
@@ -1232,11 +845,11 @@ def sumtype(
 				variant_id_fields=Class._variant_id_fields,
 				_set_attr=_set_attr,
 			)
-		) 
-	if verbose:
-		print(_def_setstate, end='\n\n')
+		)
+
+	if verbose: print(def_setstate, end='\n\n')
 	
-	__setstate__ = eval_def(_def_setstate)
+	__setstate__ = eval_def(def_setstate)
 	__setstate__.__qualname__ = typename+'.'+__setstate__.__name__
 	__setstate__.__module__ = _module_name
 	Class.__setstate__ = __setstate__
@@ -1253,6 +866,427 @@ def sumtype(
 	# 			val.__qualname__ = typename+'.'+val.__name__
 	return Class
 
+
+
+#####################
+# codegen templates #
+#####################
+
+
+_set_attr = 'cls._unsafe_set_{attr}({obj}, {val})'
+
+
+def conversion_function_template(func_name, ret_type, mk_result, variant_ids, variant_id_fields, variants):
+	'template for functions that just pack the fields into something and return it'
+	return [
+		'def '+func_name+'(self) -> '+ret_type+':', [
+			'_variant_id = self._variant_id',
+			*cond(
+				[ when("_variant_id == "+lit(id_), [
+					"return " + mk_result(
+						selfname='self',
+						id_varname='_variant_id',
+						id_=id_,
+						variant=variant, fields=fields)
+					# "return " + tuple_(
+					#	['_variant_id'] + [ 'self._{variant}_{field}'.format(variant=variant, field=field) for field in fields ])
+				  ])
+				  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+				],
+				default=['raise self.__class__._get_invalid_variant_error(_variant_id)'],
+				allow_zero_cases=True
+			)
+		],
+	]
+
+
+#._values()
+
+mk_def_values_result = lambda selfname, id_varname, id_, variant, fields: (
+	tuple_( '{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields)
+)
+
+mk_def_values = partial(
+	conversion_function_template,
+	func_name='_values',
+	ret_type='tuple',
+	mk_result=mk_def_values_result,
+)
+
+
+# ._as_tuple()
+
+mk_def_as_tuple_result = lambda selfname, id_varname, id_, variant, fields: (
+	tuple_([lit(variant)]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
+)
+
+mk_def_as_tuple = partial(
+	conversion_function_template,
+	func_name='_as_tuple',
+	ret_type='tuple',
+	mk_result=mk_def_as_tuple_result,
+)
+
+
+# ._as_dict()
+
+mk_def_as_dict_result = lambda selfname, id_varname, id_, variant, fields: (
+	apply(selfname+'.__class__._OrderedDict', [
+		tuple_(
+			[tuple_([lit('variant'), lit(variant)])]
+			+
+			[ tuple_([lit(field), '{selfname}._{variant}_{field}'\
+										.format(selfname=selfname, variant=variant, field=field)])
+			  for field in fields ]
+		)
+	])
+)
+
+mk_def_as_dict = partial(
+	conversion_function_template,
+	func_name='_as_dict',
+	ret_type=lit('OrderedDict'),
+	mk_result=mk_def_as_dict_result,
+)
+
+
+# .__getstate__()
+
+mk_def_getstate_result = lambda selfname, id_varname, id_, variant, fields: (
+	tuple_([id_varname]+['{s}._{v}_{f}'.format(s=selfname, v=variant, f=field) for field in fields])
+)
+
+mk_def_getstate = partial(
+	conversion_function_template,
+	func_name='__getstate__',
+	ret_type='tuple',
+	mk_result=mk_def_getstate_result,
+)
+
+
+
+# ._replace()
+
+def mk_def_replace(typename, typecheck, variant_ids, variants, variant_id_fields, variant_id_types, _set_attr):
+	with_fields    = [
+		(id_, variant, fields, types)
+		for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
+		if fields
+	]
+	without_fields = [
+		(id_, variant, fields, types)
+		for (id_, variant, fields, types) in zip(variant_ids, variants, variant_id_fields, variant_id_types)
+		if not fields
+	]
+
+	if typecheck == 'always' or (typecheck == 'debug' and __debug__):
+		set_fields = lambda variant, fields, types: (
+			[tuple_(field+'_type' for field in fields)+' = cls._variant_id_types[variant_id]',
+			 ''] \
+			+ \
+			concat(
+				['new_{field} = fields_and_new_vals_pop("{field}", self._{attr})'.format(field=field, attr=(variant+'_'+field)),
+				 *(['cls.assert_type(\'field "{field}"\', new_{field}, {field}_type)'.format(field=field)]
+				   if type_ is not Any and type_ is not object else []
+				  ),
+				 _set_attr.format(obj='new', attr=(variant+'_'+field), val='new_'+field),
+				 ''
+				]
+				 for (field, type_) in zip(fields, types)
+			)
+		)
+	else:
+		set_fields = lambda variant, fields, _types: [
+			 _set_attr.format(
+			 	obj='new',
+			 	attr=(variant+'_'+field),
+			 	val='fields_and_new_vals_pop("{field}", self._{attr})'.format(
+			 		field=field,
+			 		attr=(variant+'_'+field)
+			 	)
+			 )
+			 for field in fields
+		]
+
+	return [
+		'def _replace(self, **fields_and_new_vals) -> '+lit(typename)+':', [
+			'cls = self.__class__',
+			'new = cls.__new__(cls)',
+			'',
+			'variant_id = self._variant_id',
+			_set_attr.format(obj='new', attr='variant_id', val='variant_id'),
+			'',
+			# make local to avoid lookups
+			'fields_and_new_vals_pop = fields_and_new_vals.pop ',
+			'',
+			*cond(
+				# nothing to do on variants with no fields
+				([when(
+					join_with_op(
+						['variant_id == '+lit(id_) for (id_, _, _, _) in without_fields],
+						op='or', zero=False,
+					),
+					['if not fields_and_new_vals: return new'])
+				] if without_fields else [])
+				+
+				# variants with fields
+				[ when('variant_id == '+lit(id_), 
+					set_fields(variant, fields, types)
+					+
+					['if not fields_and_new_vals: return new']
+				  )
+				  for (id_, variant, fields, types) in with_fields
+				],
+				default=['raise cls._get_invalid_variant_error(variant_id)'],
+				allow_zero_cases=True,
+			),
+			'',
+			'first_bad_field = next(iter(fields_and_new_vals))',
+			'if first_bad_field.startswith("_"):', [
+				# Catch this here. if __getattr__ sees this name,
+				# it will (correctly) guess that it can't be a field,
+				# and will show the generic 'object doesn't have attribute x' error.
+				# However, if someone tries to `a._replace(_variant_id=15)`, the message will
+				# be confusing, because the objects clearly *do* have a '_variant_id' attribute.
+				'raise TypeError("_replace() can only modify fields, and \'{}\' is not a field".format(first_bad_field))',
+			],
+			'else:', [
+				# getattr should give a nice error message
+				'self.__getattr__(first_bad_field)',
+			],
+		],
+	]
+
+# mk_def_replace2 = lambda variant_ids, variant_id_fields, variants, all_variant_fields: [
+# 	'def _replace(self, '+str.join(', ', (field+'=...' for field in all_variant_fields))+'):', [
+		
+# 	]
+# ]
+
+
+# .match()
+
+mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
+	'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
+		'_variant_id = _self._variant_id',
+		*cond(
+			[
+				when('_variant_id == '+lit(id_)+' and '+variant+' is not '+unused, [
+					'return '+apply(variant, ['_self._'+variant+'_'+field for field in fields])
+				])
+				for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			] + \
+			[	
+				when('_ is not '+unused, [
+					'return _()'
+				])
+			],
+			default=[
+				'raise ValueError("Pattern match incomplete - '+
+					'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=_self))'
+			]
+		)
+	]
+]
+
+# mk_def_match = lambda variant_ids, variant_id_fields, variants, all_variant_fields, unused='...': [
+# 	'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _=...):', [
+# 		'_case = '+tuple_(variants)+'[_self._variant_id]',
+# 		'if _case is not '+unused+':' ,[
+# 			'return _case(*_self._values())'
+# 		],
+# 		'elif _ is not '+unused+':' ,[
+# 			'return _()'
+# 		],
+# 		'else:', [
+# 			'raise ValueError("Pattern match incomplete - '
+#				 'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=_self))'
+# 		]
+
+# 	]
+# ]
+
+
+# constructors
+
+# What's the best way to set the values?
+# - fast, but doesn't work with defensive setattr:
+# 	__set_field = "val.{real_attr} = {field_arg}"
+# - slower because of the extra method lookup, but works with defensive setattr
+# 	__set_field = "cls.{real_attr}.__set__(val, {field_arg})"
+# 	^ Uses property descriptors, because normal assignments are blocked to make the values more or less immutable
+
+# TODO:
+# Possible perf improvement:
+# Cache the descriptors' __set__ methods to skip one lookup.
+# This makes setting via descriptor call as fast as setting via '='. 
+# It introduces a bit of complexity though - it's another thing to
+# remember. Maybe add this after investigating Pickle integration.
+
+# Class.__set_variant_id = Class._variant_id.__set__
+# Class.__set_0 = Class._0.__set__
+# Class.__set_1 = Class._1.__set__
+
+def mk_def_constructor(typename, id_, variant, fields, types):
+	# field_args_decl = [
+	# 	(field+': '+type_literal(type_)) if type_ not in (Any, object) else field
+	# 	for (field, type_) in zip(fields, types)
+	# ]
+	return [
+		def_(variant, ['_cls', *fields]), [
+			'_val = _cls.__new__(_cls)',
+			# _set_attr.format(obj='_val', attr='variant_id', _val=lit(id_)),
+			'_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
+			*(
+			# _set_attr.format(obj='_val', attr=variant+'_'+field, _val=field)
+			"_cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
+			for field in fields
+			),
+			'return _val',
+		],
+	]
+
+
+# .is_Foo(), is_Bar(), etc. methods for pattern mathing 
+
+mk_def_is_some_variant = lambda id_, variant: [
+	'def is_'+variant+'(self) -> bool:', [
+		'return self._variant_id == '+lit(id_),
+	]
+]
+
+
+# field getters
+
+mk_def_getter = lambda field, valid_variant_ids, variants: [
+	def_(field, ['self']), [
+		'variant_id = self._variant_id',
+		*cond(
+			[ when('variant_id == '+lit(id_), [
+				'return self._{variant}_{field}'.format(variant=variants[id_], field=field)
+			  ])
+			  for id_ in valid_variant_ids
+			],
+			# the AttributeError gets swallowed by the interpreter, and __getattr__ is called as a fallback
+			default=['raise AttributeError()'], 
+			# default for classes with no variants (unusual but possible)
+			allow_zero_cases=True,
+		),
+	]
+]
+
+
+# __repr__
+
+mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields, constants: [
+	'def __repr__(self) -> str:', [
+		'variant_id = self._variant_id',
+		*cond(
+			[ when('variant_id == '+lit(id_), [
+					# reuse `apply` to build something like 'return "Foo(x={self.x})".format(self=self)'
+					# because it's good for `foo(a=x, b=y)` syntax
+					'return ' + (
+						(	'"'+ 
+							apply(
+								typename+'.'+variant,
+								kwargs=[(field, '{self._'+variant+'_'+field+'!r}') for field in fields]
+							) +
+							'".format(self=self)'
+						) if fields or not constants else (
+						'"'+typename+'.'+variant+'"'
+						)
+					)
+			  ])
+			  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			],
+			default=['raise self.__class__._get_invalid_variant_error(variant_id)'],
+			allow_zero_cases=True,
+		)
+	]
+]
+
+
+# __eq__
+
+mk_def_eq = lambda variant_ids, variants, variant_id_fields: [
+	'def __eq__(a, b) -> bool:', [
+		'if a.__class__ is not b.__class__:', [
+			'return NotImplemented',
+		],
+		'',
+		'a_variant_id = a._variant_id',
+		'b_variant_id = b._variant_id',
+		'if a_variant_id != b_variant_id:', [
+			'return False',
+		],
+		'',
+		*cond(
+			[ when("a_variant_id == "+lit(id_), [
+					# either "return (a._0 == b._0) and (a._1 == b._1) and ...""
+					# or     "return True" if a variant has no fields
+					"return " + \
+						join_with_op(
+							('a._{variant}_{field} == b._{variant}_{field}'.format(variant=variant, field=field)
+									for field in fields
+							),
+							op='and',
+							zero='True',
+						),
+			  ])
+			  for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+			],
+			default=['raise a.__class__._get_invalid_variant_error(a_variant_id)'],
+			allow_zero_cases=True
+		)
+	],
+]
+
+
+# __setstate__
+
+def mk_def_setstate(typename, variant_ids, variants, variant_id_fields, _set_attr):
+	with_fields    = [
+		(id_, variant, fields)
+		for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+		if fields
+	]
+	without_fields = [
+		(id_, variant, fields)
+		for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
+		if not fields
+	]
+
+	return [
+		'def __setstate__(self, state: tuple) -> None:', [
+			'cls = self.__class__',
+			'variant_id = state[0]',
+			_set_attr.format(obj='self', attr='variant_id', val='variant_id'),
+			# 'cls._unsafe_set_variant_id(self, variant_id)',
+			*cond(
+				([when(
+					join_with_op(
+						['variant_id == '+lit(id_) for (id_, _, _) in without_fields],
+						op='or', zero=False,
+					),
+					['return'])
+				] if without_fields else [])
+				+
+				[ when('variant_id == '+lit(id_), [
+					tuple_(['_']+['new_'+field for field in fields])+' = state'  
+				  ]+[
+					_set_attr.format(obj='self', attr=variant+'_'+field, val='new_'+field)
+					# 'cls._unsafe_set_{variant}_{field}(self, new_{field})'\
+					# 	.format(field=field, variant=variant)
+					 for field in fields
+					 # for (field_ix, field) in enumerate(variant_id_fields[id_])
+				  ]+['return'])
+				 for (id_, variant, fields) in with_fields
+				],
+				default=['raise cls._get_invalid_variant_error(variant_id)'],
+				allow_zero_cases=True,
+			),
+		],
+	]
 
 
 
