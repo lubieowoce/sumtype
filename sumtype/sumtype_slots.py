@@ -53,6 +53,9 @@ def name_errors(name: str, use: str = '') -> List[str]:
 		errors.append("Invalid {use} name: {name!r} - {use} names cannot contain leading underscores".format(**locals()))
 	if not name.isidentifier():
 		errors.append("Invalid {use} name: {name!r} - {use} names must be valid Python identifiers".format(**locals()))
+	if name in ('self', 'cls'):
+		errors.append("Invalid {use} name: {name!r} - {use} would result in name collisions".format(**locals()))
+
 	return errors
 
 
@@ -1001,12 +1004,12 @@ def mk_def_replace(typename, typecheck, variant_ids, variants, variant_id_fields
 # ._match()
 
 mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
-	'def _match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
-		'_variant_id = _self._variant_id',
+	'def _match(self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
+		'_variant_id = self._variant_id',
 		*cond(
 			[
 				when('_variant_id == '+lit(id_)+' and '+variant+' is not '+unused, [
-					'return '+apply(variant, ['_self._'+variant+'_'+field for field in fields])
+					'return '+apply(variant, ['self._'+variant+'_'+field for field in fields])
 				])
 				for (id_, variant, fields) in zip(variant_ids, variants, variant_id_fields)
 			] + \
@@ -1017,7 +1020,7 @@ mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
 			],
 			default=[
 				'raise ValueError("Pattern match incomplete - '+
-					'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=_self))'
+					'no pattern for variant {self._variant}, and no default (`_`) provided".format(self=self))'
 			]
 		)
 	]
@@ -1067,13 +1070,13 @@ def mk_def_constructor(typename, id_, variant, fields, types):
 	# 	for (field, type_) in zip(fields, types)
 	# ]
 	return [
-		def_(variant, ['_cls', *fields]), [
-			'_val = _cls.__new__(_cls)',
+		def_(variant, ['cls', *fields]), [
+			'_val = cls.__new__(cls)',
 			# _set_attr.format(obj='_val', attr='variant_id', _val=lit(id_)),
-			'_cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
+			'cls._unsafe_set_variant_id(_val, {id_})'.format(id_=id_),
 			*(
 			# _set_attr.format(obj='_val', attr=variant+'_'+field, _val=field)
-			"_cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
+			"cls._unsafe_set_{variant}_{field}(_val, {field})".format(variant=variant, field=field)
 			for field in fields
 			),
 			'return _val',
