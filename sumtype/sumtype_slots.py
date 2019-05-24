@@ -1305,142 +1305,142 @@ when used on an incorrect variant.
 
 
 
+if __debug__:
+	def main():
+		from dis import dis
 
-def main():
-	from dis import dis
+		# Void, = untyped_sumtype('Void', [], verbose=True, allow_zero_constructors=True)
+		# # print(dir(Void))
+		# print('\n\n')
+		# Void has no constructors, so it can't be instantiated.
+		# Mostly useless, but the fact that it works gives me a certain peace of mind about the codegen :)
+		# (inspired by Haskell, just like this whole module)
 
-	# Void, = untyped_sumtype('Void', [], verbose=True, allow_zero_constructors=True)
-	# # print(dir(Void))
-	# print('\n\n')
-	# Void has no constructors, so it can't be instantiated.
-	# Mostly useless, but the fact that it works gives me a certain peace of mind about the codegen :)
-	# (inspired by Haskell, just like this whole module)
+		Thing = untyped_sumtype(
+		'Thing',
+		[
+			('Foo', ['x', 'y',]),
+			('Bar', ['y',     ]),
+			('Zip', ['hey',   ]),
+			('Hop', []         ),
+		],
+		 verbose=True,
+		)
 
-	Thing = untyped_sumtype(
-	'Thing',
-	[
-		('Foo', ['x', 'y',]),
-		('Bar', ['y',     ]),
-		('Zip', ['hey',   ]),
-		('Hop', []         ),
-	],
-	 verbose=True,
-	)
+		print('__name__     : ', Thing.__name__)
+		print('__qualname__ : ', Thing.__qualname__)
+		print('__module__   : ', Thing.__module__)
+		# print('__doc__:', Thing.__doc__, sep='\n')
+		# help(Thing)
+		print('_positional_descriptors:', getattr(Thing, '_positional_descriptors', None))
+		# print(dir(Thing))
 
-	print('__name__     : ', Thing.__name__)
-	print('__qualname__ : ', Thing.__qualname__)
-	print('__module__   : ', Thing.__module__)
-	# print('__doc__:', Thing.__doc__, sep='\n')
-	# help(Thing)
-	print('_positional_descriptors:', getattr(Thing, '_positional_descriptors', None))
-	# print(dir(Thing))
-
-	# print()
-	# dis_func = Thing.__setstate__
-	# print('dis(%s):' % dis_func.__qualname__)
-	# print()
-	# dis(dis_func)
-	# print()
-	
-	foo = Thing.Foo(3, 5)
-	bar = Thing.Bar("nice")
-	zip = Thing.Zip(15.234)
-	hop = Thing.Hop()
+		# print()
+		# dis_func = Thing.__setstate__
+		# print('dis(%s):' % dis_func.__qualname__)
+		# print()
+		# dis(dis_func)
+		# print()
+		
+		foo = Thing.Foo(3, 5)
+		bar = Thing.Bar("nice")
+		zip = Thing.Zip(15.234)
+		hop = Thing.Hop()
 
 
-	print("Attribute access:")
-	all_variant_fields = uniq( sum((Thing._variant_fields[variant] for variant in Thing._variants), ()) )
+		print("Attribute access:")
+		all_variant_fields = uniq( sum((Thing._variant_fields[variant] for variant in Thing._variants), ()) )
 
-	for val in ('foo', 'bar', 'zip', 'hop'):
-		val_ = eval(val)
-		print("\t{}".format(val_))
-		for field in all_variant_fields:
-			should_work = (field in Thing._variant_fields[val_.variant])
-			expr = "{val}.{field}".format(**locals())
-			try:
-				res = eval(expr)
-				did_work = True
-			except AttributeError as e:
-				res = e
-				did_work = False
+		for val in ('foo', 'bar', 'zip', 'hop'):
+			val_ = eval(val)
+			print("\t{}".format(val_))
+			for field in all_variant_fields:
+				should_work = (field in Thing._variant_fields[val_.variant])
+				expr = "{val}.{field}".format(**locals())
+				try:
+					res = eval(expr)
+					did_work = True
+				except AttributeError as e:
+					res = e
+					did_work = False
 
+				print(
+					"\t\t{should}{did} {expr:<10}: {res!r}".format(
+						expr=expr, res=res,
+						should={True: '+', False: '-'}[should_work],
+						did={True: '+', False: '-'}[did_work]
+					)
+				)
+
+				assert should_work == did_work
+
+				# print()
+			expr = '{val}.{bad}'.format(val=val, bad=str.join('', all_variant_fields))
+			try: res = eval(expr)
+			except AttributeError as e: res = e
 			print(
-				"\t\t{should}{did} {expr:<10}: {res!r}".format(
+				"\t{expr:<10}: {res!r}".format(
 					expr=expr, res=res,
-					should={True: '+', False: '-'}[should_work],
-					did={True: '+', False: '-'}[did_work]
 				)
 			)
+			print()
+			print()
 
-			assert should_work == did_work
 
-			# print()
-		expr = '{val}.{bad}'.format(val=val, bad=str.join('', all_variant_fields))
-		try: res = eval(expr)
-		except AttributeError as e: res = e
-		print(
-			"\t{expr:<10}: {res!r}".format(
-				expr=expr, res=res,
-			)
-		)
+
+
 		print()
+		print(foo, bar, zip, hop, sep='\n')
+		# Thing._variant_id.__set__(foo, 5)
+		print("x==x:", foo==foo, bar==bar, zip==zip, hop==hop)
+		print("V(*args) == V(*args):", Thing.Foo(3,5) == Thing.Foo(3,5))
+		print("V(*args1) == V(*args2):", Thing.Foo(3,5) == Thing.Foo(0,10))
+		print("X(*args) == Y(*args)", Thing.Bar(3) == Thing.Zip(3))
 		print()
+		foo2 = foo._copy()
+		print("x, x.copy(), x is x.copy():", foo, foo2, foo is foo2, sep=', ')
+		bar2 = bar._copy()
+		print("x, x.copy(), x is x.copy():", bar, bar2, bar is bar2, sep=', ')
+		zip2 = zip._copy()
+		print("x, x.copy(), x is x.copy():", zip, zip2, zip is zip2, sep=', ')
+		hop2 = hop._copy()
+		print("x, x.copy(), x is x.copy():", hop, hop2, hop is hop2, sep=', ')
+		bar2 = bar.replace(y="better")
+		print("replace:", bar, bar2)
+		print("x.is_X()", foo.is_Foo(), bar.is_Bar(), zip.is_Zip())
+		print("x.is_Y()", foo.is_Bar(), bar.is_Zip(), zip.is_Foo())
 
+		try: res = bar.replace(blah_blah_blah=5)
+		except Exception as e: res = e
+		print("bad replace 1:", bar, repr(res))
 
+		try: res = bar.replace(_0=5)
+		except Exception as e: res = e
+		print("bad replace 2:", bar, repr(res))
 
+		try: res = bar.replace(_variant_id=5)
+		except Exception as e: res = e
+		print("bad replace 2:", bar, repr(res))
 
-	print()
-	print(foo, bar, zip, hop, sep='\n')
-	# Thing._variant_id.__set__(foo, 5)
-	print("x==x:", foo==foo, bar==bar, zip==zip, hop==hop)
-	print("V(*args) == V(*args):", Thing.Foo(3,5) == Thing.Foo(3,5))
-	print("V(*args1) == V(*args2):", Thing.Foo(3,5) == Thing.Foo(0,10))
-	print("X(*args) == Y(*args)", Thing.Bar(3) == Thing.Zip(3))
-	print()
-	foo2 = foo._copy()
-	print("x, x.copy(), x is x.copy():", foo, foo2, foo is foo2, sep=', ')
-	bar2 = bar._copy()
-	print("x, x.copy(), x is x.copy():", bar, bar2, bar is bar2, sep=', ')
-	zip2 = zip._copy()
-	print("x, x.copy(), x is x.copy():", zip, zip2, zip is zip2, sep=', ')
-	hop2 = hop._copy()
-	print("x, x.copy(), x is x.copy():", hop, hop2, hop is hop2, sep=', ')
-	bar2 = bar.replace(y="better")
-	print("replace:", bar, bar2)
-	print("x.is_X()", foo.is_Foo(), bar.is_Bar(), zip.is_Zip())
-	print("x.is_Y()", foo.is_Bar(), bar.is_Zip(), zip.is_Foo())
+		foo_ = Thing.Foo(3, 5)
+		try:
+			Thing._variant_id.__set__(foo_, 15)
+			res = repr(foo_)
+		except Exception as e:
+			res = e
+		print("repr of bad variant:", repr(res))
 
-	try: res = bar.replace(blah_blah_blah=5)
-	except Exception as e: res = e
-	print("bad replace 1:", bar, repr(res))
+		foo_ = Thing.Foo(3, 5)
+		Thing._unsafe_set_Foo_x(foo_, 10)
+		print('unsafe set: Foo(3, 5) ->', foo_)
+		# del foo._Foo_y
+		# print(foo)
 
-	try: res = bar.replace(_0=5)
-	except Exception as e: res = e
-	print("bad replace 2:", bar, repr(res))
+		# foo._Foo_y = 10
+		# print(foo)
 
-	try: res = bar.replace(_variant_id=5)
-	except Exception as e: res = e
-	print("bad replace 2:", bar, repr(res))
-
-	foo_ = Thing.Foo(3, 5)
-	try:
-		Thing._variant_id.__set__(foo_, 15)
-		res = repr(foo_)
-	except Exception as e:
-		res = e
-	print("repr of bad variant:", repr(res))
-
-	foo_ = Thing.Foo(3, 5)
-	Thing._unsafe_set_Foo_x(foo_, 10)
-	print('unsafe set: Foo(3, 5) ->', foo_)
-	# del foo._Foo_y
-	# print(foo)
-
-	# foo._Foo_y = 10
-	# print(foo)
-
-if __name__ == '__main__':
-	main()
+	if __name__ == '__main__':
+		main()
 
 
 # dynamic versions of some methods
