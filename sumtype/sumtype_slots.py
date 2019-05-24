@@ -529,7 +529,7 @@ def sumtype(
 			val.__module__ = _module_name
 			val.__qualname__ = typename+'.'+val.__name__
 
-	Class.assert_type = typeguard.check_type
+	Class.assert_type = typeguard.check_type # EXTERNAL DEPENDENCY
 
 
 	all_variant_fields = uniq( sum(Class._variant_id_fields, ()) )
@@ -560,78 +560,53 @@ def sumtype(
 	# A compiler could skip creating that tuple because it
 	# immediately gets deconstructed or inline the code, but Python is interpreted.
 
-	conversion_function_info = dict(
+
+	Class._OrderedDict = OrderedDict # EXTERNAL DEPENDENCY
+
+	conversion_function_params = dict(
 		variant_ids=Class._variant_ids,
 		variant_id_fields=Class._variant_id_fields,
 		variants=Class._variants
 	)
 
 
-	#._values()
+	functions = [
+		dict(
+			# ._as_tuple()
+			names = ['_as_tuple', 'as_tuple', '_astuple', 'astuple'],
+			mk_def_fun = mk_def_as_tuple,
+			params = conversion_function_params,
+			__doc__ = "Get the variant name and field values as a tuple.",
+		),
 
-	def_values = flatten_tree(mk_def_values(**conversion_function_info))
+		dict(
+			# ._values()
+			names = ['_values', 'values'],
+			mk_def_fun = mk_def_values,
+			params = conversion_function_params,
+			__doc__ = "Get the field values as a tuple.",
+		),
 
-	if verbose: print(def_values, end='\n\n')
+		dict(
+			# ._as_dict()
+			names = ['_as_dict', 'as_dict', '_asdict', 'asdict'],
+			mk_def_fun = mk_def_as_dict,
+			params = conversion_function_params,
+			__doc__ = "Get a dict with the variant name and field names/values.",
+		),
 
-	_values = eval_def(def_values)
-	_values.__qualname__ = typename+'.'+_values.__name__
-	_values.__module__ = _module_name
-	_values.__doc__ = "Get the field values as a tuple."
-	Class._values = _values
-	Class.values  = _values
+		dict(
+			# .__getstate__()
+			names = ['__getstate__'],
+			mk_def_fun = mk_def_getstate,
+			params = conversion_function_params,
+		),
 
-
-	# ._as_tuple()
-
-	def_as_tuple = flatten_tree(mk_def_as_tuple(**conversion_function_info))
-
-	if verbose: print(def_as_tuple, end='\n\n')
-		
-	_as_tuple = eval_def(def_as_tuple)
-	_as_tuple.__qualname__ = typename+'.'+_as_tuple.__name__
-	_as_tuple.__module__ = _module_name
-	_as_tuple.__doc__ = "Get the variant name and field values as a tuple."
-	Class._as_tuple = _as_tuple
-	Class.as_tuple  = _as_tuple 
-	Class._astuple  = _as_tuple # namedtuple convention
-	Class.astuple   = _as_tuple
-
-
-	# ._as_dict()
-
-	Class._OrderedDict = OrderedDict # EXTERNAL DEPENDENCY
-
-	def_as_dict = flatten_tree(mk_def_as_dict(**conversion_function_info))
-
-	if verbose: print(def_as_dict, end='\n\n')
-		
-	_as_dict = eval_def(def_as_dict)
-	_as_dict.__qualname__ = typename+'.'+_as_dict.__name__
-	_as_dict.__module__ = _module_name
-	_as_dict.__doc__ = "Get a dict with the variant name and field names/values."
-	Class._as_dict = _as_dict
-	Class.as_dict  = _as_dict 
-	Class._asdict  = _as_dict # namedtuple convention
-	Class.asdict   = _as_dict
-
-
-	# .__getstate__()
-
-	def_getstate = flatten_tree(mk_def_getstate(**conversion_function_info))
-
-	if verbose: print(def_getstate, end='\n\n')
-
-	__getstate__ = eval_def(def_getstate)
-	__getstate__.__qualname__ = typename+'.'+__getstate__.__name__
-	__getstate__.__module__ = _module_name
-	Class.__getstate__ = __getstate__
-
-
-	# ._replace()
-
-	def_replace = \
-		flatten_tree(
-			mk_def_replace(
+		dict(
+			# ._replace()
+			names = ['_replace', 'replace', 'set', 'update'],
+			mk_def_fun = mk_def_replace,
+			params = dict(
 				typename=typename,
 				typecheck=typecheck,
 				variant_ids=Class._variant_ids,
@@ -639,48 +614,76 @@ def sumtype(
 				variant_id_fields=Class._variant_id_fields,
 				variant_id_types=Class._variant_id_types,
 				_set_attr=_set_attr,
-			)
-		) 
+			),
+			__doc__ = (
+				"Analogous to `namedtuple`'s `_replace`.\n"
+				"Returns a new value with fields modified according\n"
+				"to the keyword arguments.\n"
+			),
+		),
 
-	if verbose: print(def_replace, end='\n\n')
-
-	_replace = eval_def(def_replace)
-	_replace.__qualname__ = typename+'.'+_replace.__name__
-	_replace.__module__ = _module_name
-	_replace.__doc__ = (
-		"Analogous to `namedtuple`'s `_replace`.\n"
-		"Returns a new value with fields modified according\n"
-		"to the keyword arguments.\n"
-	)
-	Class._replace = _replace
-	Class.replace  = _replace
-	Class.set      = _replace
-	Class.update   = _replace
-
-
-	# .match()
-	
-	def_match = \
-		flatten_tree(
-			mk_def_match(
+		dict(
+			# ._match()
+			names = ['_match', 'match'],
+			mk_def_fun = mk_def_match,
+			params = dict(
 				variant_ids=Class._variant_ids, 
 				variant_id_fields=Class._variant_id_fields, 
 				variants=Class._variants, 
-			)
-		)
+			),
+			__doc__ = "See https://github.com/lubieowoce/sumtype#pattern-matching",
+		),
 
-	if verbose: print(def_match, end='\n\n')
-		
-	_match = eval_def(def_match)
-	_match.__qualname__ = typename+'.'+_match.__name__
-	_match.__module__ = _module_name
-	_match.__doc__ = "See https://github.com/lubieowoce/sumtype#pattern-matching"
-	Class._match = _match
-	Class.match  = _match 
+		dict(
+			# .__repr__()
+			names = ['__repr__'],
+			mk_def_fun = mk_def_repr,
+			params = dict(
+				typename=typename,
+				variant_ids=Class._variant_ids,
+				variants=Class._variants,
+				variant_id_fields=Class._variant_id_fields,
+				constants=constants,
+			),
+		),
+
+		dict(
+			# .__eq__()
+			names = ['__eq__'],
+			mk_def_fun = mk_def_eq,
+			params = dict(
+				variant_ids=Class._variant_ids, 
+				variants=Class._variants, 
+				variant_id_fields=Class._variant_id_fields,
+			),
+		),
+
+		dict(
+			# .__setstate__()
+			names = ['__setstate__'],
+			mk_def_fun = mk_def_setstate,
+			params = dict(
+				typename=typename,
+				variant_ids=Class._variant_ids,
+				variants=Class._variants,
+				variant_id_fields=Class._variant_id_fields,
+				_set_attr=_set_attr,
+			),
+		),
+	]
+
+	for function_info in functions:
+		def_fun = flatten_tree(function_info['mk_def_fun'](**function_info['params']))
+		if verbose: print(def_fun, end='\n\n')
+		fun = eval_def(def_fun)
+		fun.__qualname__ = typename+'.'+fun.__name__
+		fun.__module__ = _module_name
+		fun.__doc__ = function_info.get('__doc__')
+		for name in function_info['names']:
+			setattr(Class, name, fun)
 
 
 	# constructors
-	
 	constructors = [] # pseudotype: List[ Union[Class, Callable[..., Class]] if constants else Callable[..., Class]]]
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
 		fields = Class._variant_id_fields[id_]
@@ -730,7 +733,7 @@ def sumtype(
 	Class._constructors = tuple(constructors)
 
 
-	# .is_Foo(), is_Bar(), etc. methods for pattern mathing 
+	# .is_Foo(), is_Bar(), etc. methods for pattern matching 
 
 	for (id_, variant) in zip(Class._variant_ids, Class._variants):
 		def_is_some_variant = flatten_tree(mk_def_is_some_variant(id_=id_, variant=variant))
@@ -769,7 +772,7 @@ def sumtype(
 
 		assert not hasattr(Class, field), "'{}' already defined. Class dir:\n{}".format(field, dir(Class))
 		getter = eval_def(def_getter)
-		getter.__qualname__ = '{}.{}'.format(typename, getter.__name__)
+		getter.__qualname__ = typename + '.' + getter.__name__
 		getter.__module__ = _module_name
 
 		setattr(Class, field, property(getter))
@@ -795,79 +798,6 @@ def sumtype(
 	# Collect the `_0, _1, _2, ...` descriptors in one place - comes in handy sometimes 
 	Class._positional_descriptors = tuple(getattr(Class, '_{}'.format(field_ix)) for field_ix in range(max_n_fields))
 
-
-	# __repr__
-
-	def_repr = \
-		flatten_tree(
-			mk_def_repr(
-				typename=typename,
-				variant_ids=Class._variant_ids,
-				variants=Class._variants,
-				variant_id_fields=Class._variant_id_fields,
-				constants=constants,
-			)
-		)
-
-	if verbose: print(def_repr, end='\n\n')
-
-
-	
-	__repr__ = eval_def(def_repr)
-	__repr__.__qualname__ = '{}.{}'.format(typename, __repr__.__name__)
-	__repr__.__module__ = _module_name
-	Class.__repr__ = __repr__
-
-
-	# __eq__
-	
-	def_eq = \
-		flatten_tree(
-			mk_def_eq(
-				variant_ids=Class._variant_ids, 
-				variants=Class._variants, 
-				variant_id_fields=Class._variant_id_fields,
-			)
-		)
-
-	if verbose: print(def_eq, end='\n\n')
-
-	__eq__ = eval_def(def_eq)
-	__eq__.__qualname__ = typename+'.'+__eq__.__name__
-	__eq__.__module__ = _module_name
-	Class.__eq__ = __eq__
-
-
-	# __setstate__
-
-	def_setstate = \
-		flatten_tree(
-			mk_def_setstate(
-				typename=typename,
-				variant_ids=Class._variant_ids,
-				variants=Class._variants,
-				variant_id_fields=Class._variant_id_fields,
-				_set_attr=_set_attr,
-			)
-		)
-
-	if verbose: print(def_setstate, end='\n\n')
-	
-	__setstate__ = eval_def(def_setstate)
-	__setstate__.__qualname__ = typename+'.'+__setstate__.__name__
-	__setstate__.__module__ = _module_name
-	Class.__setstate__ = __setstate__
-
-	# typename = Class.__name__
-	# for name in dir(Class):
-	# 	val = getattr(Class, name)
-	# 	mod = getattr(val, '__module__', None)
-	# 	if mod is not None and mod == __name__:
-	# 		print('fixing __module__:', val, '(was:', repr(val.__module__), ')')
-	# 		if not hasattr(val, '__module__'): raise RuntimeError('???')
-	# 		val.__module__ = _module_name
-	# 		if hasattr(val, '__qualname__'):
-	# 			val.__qualname__ = typename+'.'+val.__name__
 	return Class
 
 
@@ -1068,10 +998,10 @@ def mk_def_replace(typename, typecheck, variant_ids, variants, variant_id_fields
 # ]
 
 
-# .match()
+# ._match()
 
 mk_def_match = lambda variant_ids, variant_id_fields, variants, unused='...': [
-	'def match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
+	'def _match(_self, '+(str.join(', ', (variant+'='+unused for variant in variants)) if variants else '*') +', _='+unused+'):', [
 		'_variant_id = _self._variant_id',
 		*cond(
 			[
@@ -1180,7 +1110,7 @@ mk_def_getter = lambda field, valid_variant_ids, variants: [
 ]
 
 
-# __repr__
+# .__repr__()
 
 mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields, constants: [
 	'def __repr__(self) -> str:', [
@@ -1210,7 +1140,7 @@ mk_def_repr = lambda typename, variant_ids, variants, variant_id_fields, constan
 ]
 
 
-# __eq__
+# .__eq__()
 
 mk_def_eq = lambda variant_ids, variants, variant_id_fields: [
 	'def __eq__(a, b) -> bool:', [
@@ -1246,7 +1176,7 @@ mk_def_eq = lambda variant_ids, variants, variant_id_fields: [
 ]
 
 
-# __setstate__
+# .__setstate__()
 
 def mk_def_setstate(typename, variant_ids, variants, variant_id_fields, _set_attr):
 	with_fields    = [
